@@ -10,7 +10,7 @@
 - Agent 模式、工具调用、Instructions、MCP、Skills 仍然由 Copilot Chat 驱动，模型请求转发到你的 OpenAI 兼容路由接口。
 - API Key 存在 VS Code SecretStorage 中，不写入 `settings.json`。
 - 魔法路由模型列表默认从 `/models` 动态读取，也可以用设置固定展示指定模型。
-- 成本信息会从公开模型页补齐，并显示在 Copilot 的成本列中。
+- 对 AIXRouter / AgileRouter Base URL，成本、多模态和上下文信息会从公开模型页补齐，并显示在 Copilot 的模型选择器中；也可以关闭该增强。
 - 多模态模型会接收 Copilot Chat 中的图片附件，并按 OpenAI `image_url` 内容格式发送给路由接口。
 - 支持 OpenAI 兼容流式输出、工具调用和 `reasoning_content` 思考内容；Claude、GPT、Gemini 等主流模型会按 Copilot 风格显示思考工作量选项。
 
@@ -37,6 +37,7 @@
 | `magicrouter.maxTokens` | `0` | 最大输出 Token，`0` 表示不限制 |
 | `magicrouter.temperature` | `null` | 可选温度参数 |
 | `magicrouter.reasoningEffort` | `high` | 支持思考模型的默认思考强度 |
+| `magicrouter.enrichPublicModelMetadata` | `true` | 对 AIXRouter / AgileRouter Base URL，从公开模型页补齐成本、多模态和上下文信息 |
 | `magicrouter.debug` | `false` | 输出调试日志，不记录完整提示词 |
 
 固定模型示例：
@@ -79,4 +80,4 @@ npm run compile
 
 ## 说明
 
-认证方式为 `Authorization: Bearer <your-api-key>`。本扩展按 OpenAI 兼容协议调用 `{baseUrl}/models` 和 `{baseUrl}/chat/completions`。
+认证方式为 `Authorization: Bearer <your-api-key>`。本扩展按 OpenAI 兼容协议调用 `{baseUrl}/models` 和 `{baseUrl}/chat/completions`。公开模型页只用于补充元数据：当 Base URL 属于 `aixrouter.com` 时访问 `https://www.aixrouter.com/models`，属于 `agilerouter.com` 时访问 `https://www.agilerouter.com/models`；其他域名不会访问这两个页面。

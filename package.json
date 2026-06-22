@@ -151,6 +151,11 @@
           ],
           "description": "Reasoning effort for models that support thinking mode."
         },
+        "magicrouter.enrichPublicModelMetadata": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enrich model metadata from the public Magic Router model catalog for supported AIXRouter and AgileRouter base URLs."
+        },
         "magicrouter.debug": {
           "type": "boolean",
           "default": false,

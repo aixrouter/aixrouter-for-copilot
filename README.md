@@ -12,7 +12,7 @@ Magic Router for Copilot does not replace Copilot Chat or add a separate chat UI
 - Loads models from `{baseUrl}/models`.
 - Sends chat requests to `{baseUrl}/chat/completions`.
 - Supports OpenAI-compatible streaming, tool calls, image input, and reasoning output.
-- Enriches model metadata with cost, vendor, multimodal, thinking, and context options when available.
+- Enriches model metadata with cost, vendor, multimodal, thinking, and context options for supported AIXRouter and AgileRouter base URLs when enabled.
 
 ## Requirements
 
@@ -45,6 +45,7 @@ Magic Router for Copilot does not replace Copilot Chat or add a separate chat UI
 | `magicrouter.maxTokens` | `0` | Maximum completion tokens. `0` means provider default. |
 | `magicrouter.temperature` | `null` | Optional temperature. |
 | `magicrouter.reasoningEffort` | `high` | Default reasoning effort for models that expose thinking mode. |
+| `magicrouter.enrichPublicModelMetadata` | `true` | Enrich cost, multimodal, and context metadata from the public model catalog for AIXRouter and AgileRouter base URLs. |
 | `magicrouter.debug` | `false` | Write request diagnostics to the output channel. Prompt text is not logged. |
 
 ## Development

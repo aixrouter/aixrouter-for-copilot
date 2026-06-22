@@ -5,6 +5,7 @@ import {
   hasBaseUrl,
   getMaxTokens,
   getPinnedModels,
+  getPublicModelMetadataEnabled,
   getReasoningEffort,
   getTemperature,
   onConfigChanged,
@@ -142,7 +143,7 @@ export class AIXRouterChatProvider implements vscode.LanguageModelChatProvider {
     const disposable = token.onCancellationRequested(() => abort.abort());
 
     try {
-      const models = await new AIXRouterClient(baseUrl, apiKey).listModels(abort.signal);
+      const models = await new AIXRouterClient(baseUrl, apiKey, getPublicModelMetadataEnabled()).listModels(abort.signal);
       this.logger.info(`Loaded ${models.length} Magic Router model(s).`);
       return models;
     } catch (error) {

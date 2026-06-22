@@ -33,6 +33,7 @@ export class AIXRouterClient {
   constructor(
     private readonly baseUrl: string,
     private readonly apiKey: string,
+    private readonly enrichPublicModelMetadata = true,
   ) {}
 
   async listModels(signal?: AbortSignal): Promise<AIXRouterModelConfig[]> {
@@ -51,7 +52,9 @@ export class AIXRouterClient {
       .map(toModelConfig)
       .filter((model): model is AIXRouterModelConfig => Boolean(model?.id));
 
-    const enrichment = await loadPublicModelEnrichment(this.baseUrl, signal).catch(() => new Map());
+    const enrichment = this.enrichPublicModelMetadata
+      ? await loadPublicModelEnrichment(this.baseUrl, signal).catch(() => new Map())
+      : new Map();
     return mergePublicModelEnrichment(models, enrichment);
   }
 

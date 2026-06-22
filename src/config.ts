@@ -64,6 +64,10 @@ export function getDebugEnabled(): boolean {
   return getConfig().get('debug', false);
 }
 
+export function getPublicModelMetadataEnabled(): boolean {
+  return getConfig().get('enrichPublicModelMetadata', true);
+}
+
 export function onConfigChanged(listener: () => void): vscode.Disposable {
   return vscode.workspace.onDidChangeConfiguration((event) => {
     if (event.affectsConfiguration(SECTION)) {
