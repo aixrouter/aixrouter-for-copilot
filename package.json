@@ -41,41 +41,41 @@
   "contributes": {
     "languageModelChatProviders": [
       {
-        "vendor": "aixrouter",
+        "vendor": "magicrouter",
         "displayName": "Magic Router"
       }
     ],
     "commands": [
       {
-        "command": "aixrouter-copilot.setBaseUrl",
+        "command": "magicrouter.setBaseUrl",
         "title": "Magic Router: Set Base URL"
       },
       {
-        "command": "aixrouter-copilot.setApiKey",
+        "command": "magicrouter.setApiKey",
         "title": "Magic Router: Set API Key"
       },
       {
-        "command": "aixrouter-copilot.clearApiKey",
+        "command": "magicrouter.clearApiKey",
         "title": "Magic Router: Clear API Key"
       },
       {
-        "command": "aixrouter-copilot.refreshModels",
+        "command": "magicrouter.refreshModels",
         "title": "Magic Router: Refresh Models"
       },
       {
-        "command": "aixrouter-copilot.openSettings",
+        "command": "magicrouter.openSettings",
         "title": "Magic Router: Open Settings"
       }
     ],
     "configuration": {
       "title": "Magic Router for Copilot",
       "properties": {
-        "aixrouter-copilot.baseUrl": {
+        "magicrouter.baseUrl": {
           "type": "string",
           "default": "",
           "description": "OpenAI-compatible Magic Router base URL, for example https://api.example.com/openai/v1."
         },
-        "aixrouter-copilot.models": {
+        "magicrouter.models": {
           "type": "array",
           "default": [],
           "markdownDescription": "Optional pinned model list. Leave empty to load from `/models`. Each item accepts `id`, `name`, `family`, `version`, `maxInputTokens`, `maxOutputTokens`, `toolCalling`, `vision`, and `thinking`.",
@@ -124,13 +124,13 @@
             }
           }
         },
-        "aixrouter-copilot.maxTokens": {
+        "magicrouter.maxTokens": {
           "type": "number",
           "default": 0,
           "minimum": 0,
           "description": "Maximum completion tokens. 0 means provider default."
         },
-        "aixrouter-copilot.temperature": {
+        "magicrouter.temperature": {
           "type": [
             "number",
             "null"
@@ -140,7 +140,7 @@
           "maximum": 2,
           "description": "Optional request temperature."
         },
-        "aixrouter-copilot.reasoningEffort": {
+        "magicrouter.reasoningEffort": {
           "type": "string",
           "default": "high",
           "enum": [
@@ -151,7 +151,7 @@
           ],
           "description": "Reasoning effort for models that support thinking mode."
         },
-        "aixrouter-copilot.debug": {
+        "magicrouter.debug": {
           "type": "boolean",
           "default": false,
           "description": "Write request and stream diagnostics to the Magic Router output channel. Prompt text is not logged."

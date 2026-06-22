@@ -1,12 +1,13 @@
 import * as vscode from 'vscode';
 
-const SECRET_KEY = 'aixrouter-copilot.apiKey';
+const SECRET_KEY = 'magicrouter.apiKey';
+const LEGACY_SECRET_KEY = 'aixrouter-copilot.apiKey';
 
 export class AuthStore {
   constructor(private readonly secrets: vscode.SecretStorage) {}
 
-  getApiKey(): Thenable<string | undefined> {
-    return this.secrets.get(SECRET_KEY);
+  async getApiKey(): Promise<string | undefined> {
+    return await this.secrets.get(SECRET_KEY) ?? await this.secrets.get(LEGACY_SECRET_KEY);
   }
 
   async hasApiKey(): Promise<boolean> {
@@ -32,6 +33,7 @@ export class AuthStore {
 
   async clearApiKey(): Promise<void> {
     await this.secrets.delete(SECRET_KEY);
+    await this.secrets.delete(LEGACY_SECRET_KEY);
     vscode.window.showInformationMessage('Magic Router API Key cleared.');
   }
 }

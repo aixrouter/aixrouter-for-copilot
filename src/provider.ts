@@ -191,8 +191,8 @@ function toChatInfo(model: AIXRouterModelConfig, hasKey: boolean, hasUrl: boolea
   return {
     id: model.id,
     name: model.name || model.id,
-    family: model.family || 'aixrouter',
-    version: model.version || 'aixrouter',
+    family: model.family || 'magicrouter',
+    version: model.version || 'magicrouter',
     maxInputTokens: model.maxInputTokens ?? 128000,
     maxOutputTokens: model.maxOutputTokens ?? 8192,
     detail: configured ? 'Magic Router BYOK' : getSetupDetail(hasUrl, hasKey),
@@ -213,7 +213,7 @@ function toSetupChatInfo(hasUrl: boolean, hasKey: boolean): ModelPickerInfo {
   return {
     id: 'setup-required',
     name: 'Configure Magic Router',
-    family: 'aixrouter',
+    family: 'magicrouter',
     version: 'setup',
     maxInputTokens: 1,
     maxOutputTokens: 1,

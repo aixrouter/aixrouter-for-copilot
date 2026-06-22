@@ -40,12 +40,12 @@ Magic Router for Copilot does not replace Copilot Chat or add a separate chat UI
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `aixrouter-copilot.baseUrl` | empty | OpenAI-compatible Base URL. |
-| `aixrouter-copilot.models` | `[]` | Optional pinned model list. Leave empty to load from `/models`. |
-| `aixrouter-copilot.maxTokens` | `0` | Maximum completion tokens. `0` means provider default. |
-| `aixrouter-copilot.temperature` | `null` | Optional temperature. |
-| `aixrouter-copilot.reasoningEffort` | `high` | Default reasoning effort for models that expose thinking mode. |
-| `aixrouter-copilot.debug` | `false` | Write request diagnostics to the output channel. Prompt text is not logged. |
+| `magicrouter.baseUrl` | empty | OpenAI-compatible Base URL. |
+| `magicrouter.models` | `[]` | Optional pinned model list. Leave empty to load from `/models`. |
+| `magicrouter.maxTokens` | `0` | Maximum completion tokens. `0` means provider default. |
+| `magicrouter.temperature` | `null` | Optional temperature. |
+| `magicrouter.reasoningEffort` | `high` | Default reasoning effort for models that expose thinking mode. |
+| `magicrouter.debug` | `false` | Write request diagnostics to the output channel. Prompt text is not logged. |
 
 ## Development
 

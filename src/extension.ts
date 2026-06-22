@@ -14,24 +14,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     logger,
     provider,
-    vscode.commands.registerCommand('aixrouter-copilot.setBaseUrl', async () => {
+    vscode.commands.registerCommand('magicrouter.setBaseUrl', async () => {
       await setBaseUrl();
       provider.refreshModelPicker();
     }),
-    vscode.commands.registerCommand('aixrouter-copilot.setApiKey', async () => {
+    vscode.commands.registerCommand('magicrouter.setApiKey', async () => {
       await auth.setApiKey();
       provider.refreshModelPicker();
     }),
-    vscode.commands.registerCommand('aixrouter-copilot.clearApiKey', async () => {
+    vscode.commands.registerCommand('magicrouter.clearApiKey', async () => {
       await auth.clearApiKey();
       provider.refreshModelPicker();
     }),
-    vscode.commands.registerCommand('aixrouter-copilot.refreshModels', () => {
+    vscode.commands.registerCommand('magicrouter.refreshModels', () => {
       provider.refreshModelPicker();
       vscode.window.showInformationMessage('Magic Router model list refreshed.');
     }),
-    vscode.commands.registerCommand('aixrouter-copilot.openSettings', () => openSettings()),
-    vscode.lm.registerLanguageModelChatProvider('aixrouter', provider),
+    vscode.commands.registerCommand('magicrouter.openSettings', () => openSettings()),
+    vscode.lm.registerLanguageModelChatProvider('magicrouter', provider),
   );
 
   await activateCopilotChat(logger);

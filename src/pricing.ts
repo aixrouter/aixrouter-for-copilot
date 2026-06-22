@@ -17,8 +17,6 @@ interface PublicModelMetadata {
   readonly cacheCreationPer1M?: number;
 }
 
-const PUBLIC_MODELS_URL = 'https://www.aixrouter.com/models';
-
 export interface PublicModelEnrichment {
   readonly name?: string;
   readonly family?: string;
@@ -30,9 +28,15 @@ export interface PublicModelEnrichment {
 }
 
 export async function loadPublicModelEnrichment(
+  baseUrl: string,
   signal?: AbortSignal,
 ): Promise<Map<string, PublicModelEnrichment>> {
-  const response = await fetch(PUBLIC_MODELS_URL, { signal });
+  const publicModelsUrl = getPublicModelsUrl(baseUrl);
+  if (!publicModelsUrl) {
+    return new Map();
+  }
+
+  const response = await fetch(publicModelsUrl, { signal });
   if (!response.ok) {
     return new Map();
   }
@@ -63,6 +67,22 @@ export async function loadPublicModelEnrichment(
   }
 
   return map;
+}
+
+function getPublicModelsUrl(baseUrl: string): string | undefined {
+  try {
+    const host = new URL(baseUrl).hostname.toLowerCase();
+    if (host === 'aixrouter.com' || host.endsWith('.aixrouter.com')) {
+      return 'https://www.aixrouter.com/models';
+    }
+    if (host === 'agilerouter.com' || host.endsWith('.agilerouter.com')) {
+      return 'https://www.agilerouter.com/models';
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
 }
 
 export function mergePublicModelEnrichment(

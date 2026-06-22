@@ -32,18 +32,18 @@
 
 | 设置项 | 默认值 | 说明 |
 | --- | --- | --- |
-| `aixrouter-copilot.baseUrl` | 空 | OpenAI 兼容 API Base URL，首次安装后由用户输入 |
-| `aixrouter-copilot.models` | `[]` | 固定模型列表。留空时从 `/models` 动态读取 |
-| `aixrouter-copilot.maxTokens` | `0` | 最大输出 Token，`0` 表示不限制 |
-| `aixrouter-copilot.temperature` | `null` | 可选温度参数 |
-| `aixrouter-copilot.reasoningEffort` | `high` | 支持思考模型的默认思考强度 |
-| `aixrouter-copilot.debug` | `false` | 输出调试日志，不记录完整提示词 |
+| `magicrouter.baseUrl` | 空 | OpenAI 兼容 API Base URL，首次安装后由用户输入 |
+| `magicrouter.models` | `[]` | 固定模型列表。留空时从 `/models` 动态读取 |
+| `magicrouter.maxTokens` | `0` | 最大输出 Token，`0` 表示不限制 |
+| `magicrouter.temperature` | `null` | 可选温度参数 |
+| `magicrouter.reasoningEffort` | `high` | 支持思考模型的默认思考强度 |
+| `magicrouter.debug` | `false` | 输出调试日志，不记录完整提示词 |
 
 固定模型示例：
 
 ```json
 {
-  "aixrouter-copilot.models": [
+  "magicrouter.models": [
     {
       "id": "gpt-4o",
       "name": "GPT-4o via Magic Router",
