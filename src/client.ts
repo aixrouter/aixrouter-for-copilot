@@ -41,6 +41,8 @@ interface ToolCallAccumulator {
   arguments: string;
 }
 
+type AIXRouterApiKind = 'openai' | 'claude' | 'gemini' | 'vertexai';
+
 export class AIXRouterClient {
   constructor(
     private readonly baseUrl: string,
@@ -49,7 +51,7 @@ export class AIXRouterClient {
   ) {}
 
   async listModels(signal?: AbortSignal): Promise<AIXRouterModelConfig[]> {
-    const response = await fetch(`${this.baseUrl}/models`, {
+    const response = await fetch(buildEndpointUrl(this.baseUrl, 'openai', 'models'), {
       method: 'GET',
       headers: this.headers(),
       signal,
@@ -72,10 +74,11 @@ export class AIXRouterClient {
 
   async streamChatCompletion(
     request: ChatCompletionRequest,
+    routeHint: string | undefined,
     handlers: StreamHandlers,
     signal?: AbortSignal,
   ): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
+    const response = await fetch(buildEndpointUrl(this.baseUrl, getModelApiKind(routeHint ?? request.model), 'chat/completions'), {
       method: 'POST',
       headers: {
         ...this.headers(),
@@ -268,6 +271,41 @@ function inferFamily(id: string): string {
 
 function isPlaceholderOwner(value: string | undefined): boolean {
   return !value || value === 'kredo' || value === 'aixrouter';
+}
+
+function getModelApiKind(modelId: string): AIXRouterApiKind {
+  const normalized = modelId.toLowerCase();
+  if (normalized.includes('vertex') || normalized.includes('vertexai')) {
+    return 'vertexai';
+  }
+  if (normalized.startsWith('claude-') || normalized.includes('/claude-') || normalized.includes('anthropic')) {
+    return 'claude';
+  }
+  if (normalized.startsWith('gemini-') || normalized.includes('/gemini-') || normalized.includes('google/gemini')) {
+    return 'gemini';
+  }
+  return 'openai';
+}
+
+function buildEndpointUrl(baseUrl: string, kind: AIXRouterApiKind, resourcePath: string): string {
+  return `${getGatewayRoot(baseUrl)}/${getApiPath(kind)}/${resourcePath}`;
+}
+
+function getGatewayRoot(baseUrl: string): string {
+  return baseUrl.replace(/\/+(openai\/v1|claude\/v1|gemini\/v1beta|vertexai\/v1)$/i, '');
+}
+
+function getApiPath(kind: AIXRouterApiKind): string {
+  switch (kind) {
+    case 'claude':
+      return 'claude/v1';
+    case 'gemini':
+      return 'gemini/v1beta';
+    case 'vertexai':
+      return 'vertexai/v1';
+    case 'openai':
+      return 'openai/v1';
+  }
 }
 
 function normalizeModelText(model: RawModel): string {

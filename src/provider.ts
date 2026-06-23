@@ -105,10 +105,11 @@ export class AIXRouterChatProvider implements vscode.LanguageModelChatProvider {
     try {
       const request = this.createRequest(model, messages, options as ModelOptions);
       const selectedContext = getConfiguredContextWindow(model, options as ModelOptions);
-      this.logger.debug(`POST /chat/completions model=${request.model} messages=${request.messages.length} tools=${request.tools?.length ?? 0} context=${selectedContext ?? 'default'}`);
+      this.logger.debug(`POST routed chat/completions model=${request.model} messages=${request.messages.length} tools=${request.tools?.length ?? 0} context=${selectedContext ?? 'default'}`);
 
       await new AIXRouterClient(baseUrl, apiKey).streamChatCompletion(
         request,
+        getModelRouteHint(model),
         {
           onText: (text) => progress.report(new vscode.LanguageModelTextPart(text)),
           onThinking: (text) => reportThinking(progress, text),
@@ -268,6 +269,12 @@ function getSetupDetail(hasUrl: boolean, hasKey: boolean): string {
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function getModelRouteHint(model: AIXRouterModelConfig): string {
+  return [model.id, model.name, model.family, model.sourceType]
+    .filter(Boolean)
+    .join(' ');
 }
 
 function toConfigurationSchema(model: AIXRouterModelConfig): { configurationSchema?: object } {

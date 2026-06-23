@@ -2,9 +2,10 @@ import * as vscode from 'vscode';
 import type { AIXRouterModelConfig } from './types';
 
 const SECTION = 'aixrouter';
+const DEFAULT_BASE_URL = 'https://api.aixrouter.com';
 
 export function getBaseUrl(): string {
-  return trimTrailingSlash(getConfig().get('baseUrl', ''));
+  return trimTrailingSlash(getConfig().get('baseUrl', DEFAULT_BASE_URL));
 }
 
 export function hasBaseUrl(): boolean {
@@ -14,7 +15,7 @@ export function hasBaseUrl(): boolean {
 export async function setBaseUrl(): Promise<boolean> {
   const value = await vscode.window.showInputBox({
     title: 'AIXRouter Base URL',
-    prompt: 'Enter your OpenAI-compatible base URL, for example https://api.example.com/openai/v1.',
+    prompt: 'Enter your AIXRouter gateway base URL, for example https://api.aixrouter.com.',
     value: getBaseUrl(),
     ignoreFocusOut: true,
     validateInput: (input) => {

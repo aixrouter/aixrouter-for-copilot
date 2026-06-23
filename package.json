@@ -74,13 +74,13 @@
       "properties": {
         "aixrouter.baseUrl": {
           "type": "string",
-          "default": "",
-          "description": "OpenAI-compatible AIXRouter base URL, for example https://api.example.com/openai/v1."
+          "default": "https://api.aixrouter.com",
+          "description": "AIXRouter gateway base URL. The extension routes requests to /openai/v1, /claude/v1, /gemini/v1beta, or /vertexai/v1 by model."
         },
         "aixrouter.models": {
           "type": "array",
           "default": [],
-          "markdownDescription": "Optional pinned model list. Leave empty to load from `/models`. Each item accepts `id`, `name`, `family`, `version`, `maxInputTokens`, `maxOutputTokens`, `toolCalling`, `vision`, and `thinking`.",
+          "markdownDescription": "Optional pinned model list. Leave empty to load from `/openai/v1/models`. Each item accepts `id`, `name`, `family`, `version`, `maxInputTokens`, `maxOutputTokens`, `toolCalling`, `vision`, and `thinking`.",
           "items": {
             "type": "object",
             "required": [

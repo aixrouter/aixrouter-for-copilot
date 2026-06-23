@@ -11,8 +11,8 @@ AIXRouter does not replace Copilot Chat or add a separate chat UI. It registers 
 - Adds AIXRouter models to the Copilot Chat model picker.
 - Uses your own API key, stored in VS Code SecretStorage.
 - Prompts for Base URL and API key on first setup.
-- Loads models from `{baseUrl}/models`.
-- Sends chat requests to `{baseUrl}/chat/completions`.
+- Loads models from `{baseUrl}/openai/v1/models`.
+- Routes chat requests by model family: Claude to `/claude/v1`, Gemini to `/gemini/v1beta`, Vertex AI to `/vertexai/v1`, and other models to `/openai/v1`.
 - Supports OpenAI-compatible streaming, tool calls, image input, and reasoning output.
 - Enriches model metadata with cost, vendor, multimodal, thinking, and context options for supported AIXRouter and AgileRouter base URLs when enabled.
 
@@ -26,7 +26,7 @@ AIXRouter does not replace Copilot Chat or add a separate chat UI. It registers 
 
 1. Install the extension.
 2. Run `AIXRouter: Set Base URL`.
-3. Enter your OpenAI-compatible Base URL, for example `https://api.example.com/openai/v1`.
+3. Enter your AIXRouter gateway Base URL, for example `https://api.aixrouter.com`.
 4. Run `AIXRouter: Set API Key`.
 5. Open Copilot Chat and choose an AIXRouter model from the model picker.
 
@@ -34,8 +34,21 @@ Common Base URLs:
 
 | Provider | Base URL |
 | --- | --- |
-| AIXRouter | `https://api.aixrouter.com/openai/v1` |
-| AgileRouter | `https://api.agilerouter.com/openai/v1` |
+| AIXRouter | `https://api.aixrouter.com` |
+| AgileRouter | `https://api.agilerouter.com` |
+
+## API Routing
+
+AIXRouter treats `aixrouter.baseUrl` as the gateway root. With the default `https://api.aixrouter.com`, requests are routed as follows:
+
+| Model family | Endpoint |
+| --- | --- |
+| Anthropic Claude | `https://api.aixrouter.com/claude/v1/chat/completions` |
+| Google Gemini | `https://api.aixrouter.com/gemini/v1beta/chat/completions` |
+| Google Vertex AI | `https://api.aixrouter.com/vertexai/v1/chat/completions` |
+| Other OpenAI-compatible models | `https://api.aixrouter.com/openai/v1/chat/completions` |
+
+The model list is loaded from `https://api.aixrouter.com/openai/v1/models`.
 
 ## Commands
 
@@ -49,8 +62,8 @@ Common Base URLs:
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `aixrouter.baseUrl` | empty | OpenAI-compatible Base URL. |
-| `aixrouter.models` | `[]` | Optional pinned model list. Leave empty to load from `/models`. |
+| `aixrouter.baseUrl` | `https://api.aixrouter.com` | AIXRouter gateway Base URL. The extension appends the model-specific API path automatically. |
+| `aixrouter.models` | `[]` | Optional pinned model list. Leave empty to load from `/openai/v1/models`. |
 | `aixrouter.maxTokens` | `0` | Maximum completion tokens. `0` means provider default. |
 | `aixrouter.temperature` | `null` | Optional temperature. |
 | `aixrouter.reasoningEffort` | `high` | Default reasoning effort for models that expose thinking mode. |
@@ -59,7 +72,7 @@ Common Base URLs:
 
 ## Recommended Model Metadata
 
-`{baseUrl}/models` is the authoritative source for model availability. For the best Copilot model picker experience, each model can include capability, context, and pricing metadata:
+`{baseUrl}/openai/v1/models` is the authoritative source for model availability. For the best Copilot model picker experience, each model can include capability, context, and pricing metadata:
 
 ```json
 {
