@@ -219,7 +219,7 @@ function toChatInfo(model: AIXRouterModelConfig, hasKey: boolean, hasUrl: boolea
   return {
     id: model.id,
     name: model.name || model.id,
-    family: model.family || 'aixrouter',
+    family: 'aixrouter',
     version: model.version || 'aixrouter',
     maxInputTokens: model.maxInputTokens ?? 128000,
     maxOutputTokens: model.maxOutputTokens ?? 8192,
