@@ -113,6 +113,7 @@ export class AIXRouterClient {
     const decoder = new TextDecoder();
     const toolCalls = new Map<number, ToolCallAccumulator>();
     let buffer = '';
+    let emittedText = false;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -132,15 +133,25 @@ export class AIXRouterClient {
 
         const data = trimmed.slice('data:'.length).trim();
         if (data === '[DONE]') {
-          flushToolCalls(toolCalls, handlers);
+          const emittedTools = flushToolCalls(toolCalls, handlers);
+          if (!emittedText && !emittedTools) {
+            throw new Error('AIXRouter response did not contain any assistant text. Check the selected model and endpoint compatibility.');
+          }
           return;
         }
 
-        processSseData(data, toolCalls, handlers);
+        emittedText = processResponseData(data, toolCalls, handlers) || emittedText;
       }
     }
 
-    flushToolCalls(toolCalls, handlers);
+    if (buffer.trim()) {
+      emittedText = processResponseData(buffer.trim(), toolCalls, handlers) || emittedText;
+    }
+
+    const emittedTools = flushToolCalls(toolCalls, handlers);
+    if (!emittedText && !emittedTools) {
+      throw new Error('AIXRouter response did not contain any assistant text. Check the selected model and endpoint compatibility.');
+    }
   }
 
   private headers(): Record<string, string> {
@@ -150,37 +161,47 @@ export class AIXRouterClient {
   }
 }
 
-function processSseData(
+function processResponseData(
   data: string,
   toolCalls: Map<number, ToolCallAccumulator>,
   handlers: StreamHandlers,
-): void {
+): boolean {
   let json: any;
   try {
     json = JSON.parse(data);
   } catch {
-    return;
+    return false;
   }
 
+  return processResponseJson(json, toolCalls, handlers);
+}
+
+function processResponseJson(
+  json: any,
+  toolCalls: Map<number, ToolCallAccumulator>,
+  handlers: StreamHandlers,
+): boolean {
   if (json.usage) {
     handlers.onUsage(json.usage);
   }
 
-  const delta = json.choices?.[0]?.delta;
-  if (!delta) {
-    return;
+  let emittedText = false;
+  const choice = json.choices?.[0];
+  const delta = choice?.delta ?? choice?.message ?? json.delta ?? json.message ?? json;
+
+  const text = extractText(delta?.content ?? delta?.text ?? json.text ?? json.response);
+  if (text) {
+    handlers.onText(text);
+    emittedText = true;
   }
 
-  if (typeof delta.content === 'string' && delta.content.length > 0) {
-    handlers.onText(delta.content);
-  }
-
-  const thinking = delta.reasoning_content ?? delta.reasoning;
-  if (typeof thinking === 'string' && thinking.length > 0) {
+  const thinking = extractText(delta?.reasoning_content ?? delta?.reasoning ?? delta?.thinking);
+  if (thinking) {
     handlers.onThinking(thinking);
+    emittedText = true;
   }
 
-  for (const rawToolCall of delta.tool_calls ?? []) {
+  for (const rawToolCall of delta?.tool_calls ?? []) {
     const index = rawToolCall.index ?? toolCalls.size;
     const current = toolCalls.get(index) ?? { id: '', name: '', arguments: '' };
     current.id += rawToolCall.id ?? '';
@@ -188,12 +209,42 @@ function processSseData(
     current.arguments += rawToolCall.function?.arguments ?? '';
     toolCalls.set(index, current);
   }
+
+  return emittedText;
+}
+
+function extractText(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    return value.length > 0 ? value : undefined;
+  }
+
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const text = value
+    .map((part) => {
+      if (typeof part === 'string') {
+        return part;
+      }
+      if (typeof part?.text === 'string') {
+        return part.text;
+      }
+      if (typeof part?.content === 'string') {
+        return part.content;
+      }
+      return '';
+    })
+    .join('');
+
+  return text.length > 0 ? text : undefined;
 }
 
 function flushToolCalls(
   toolCalls: Map<number, ToolCallAccumulator>,
   handlers: StreamHandlers,
-): void {
+): boolean {
+  let emitted = false;
   for (const [index, toolCall] of [...toolCalls.entries()].sort(([a], [b]) => a - b)) {
     if (!toolCall.name) {
       continue;
@@ -206,8 +257,10 @@ function flushToolCalls(
         arguments: toolCall.arguments || '{}',
       },
     });
+    emitted = true;
   }
   toolCalls.clear();
+  return emitted;
 }
 
 function toModelConfig(model: RawModel): AIXRouterModelConfig | undefined {
