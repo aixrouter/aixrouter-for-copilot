@@ -78,7 +78,8 @@ export class AIXRouterClient {
     handlers: StreamHandlers,
     signal?: AbortSignal,
   ): Promise<void> {
-    const response = await fetch(buildEndpointUrl(this.baseUrl, getModelApiKind(routeHint ?? request.model), 'chat/completions'), {
+    const apiKind = getModelApiKind(routeHint ?? request.model);
+    let response = await fetch(buildEndpointUrl(this.baseUrl, apiKind, 'chat/completions'), {
       method: 'POST',
       headers: {
         ...this.headers(),
@@ -87,6 +88,18 @@ export class AIXRouterClient {
       body: JSON.stringify(request),
       signal,
     });
+
+    if (response.status === 404 && apiKind !== 'openai') {
+      response = await fetch(buildEndpointUrl(this.baseUrl, 'openai', 'chat/completions'), {
+        method: 'POST',
+        headers: {
+          ...this.headers(),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(request),
+        signal,
+      });
+    }
 
     if (!response.ok) {
       throw await createHttpError('AIXRouter chat completion failed', response);
