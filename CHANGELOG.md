@@ -12,6 +12,8 @@
 - Improve: Deduplicate concurrent model list loads.
 - Improve: Clamp Claude temperature to the supported range and improve token estimates for CJK text.
 - Improve: Preserve system-role messages when VS Code provides them.
+- Improve: Share model context-window and number parsing helpers across client and pricing code.
+- Improve: Add initial-response timeouts and one retry for OpenAI-compatible chat and model list requests.
 
 ## 0.1.4
 

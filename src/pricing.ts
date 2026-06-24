@@ -1,4 +1,6 @@
 import type { AIXRouterModelConfig, AIXRouterPricing } from './types';
+import { fetchWithRetry } from './http';
+import { getContextWindows, numberFrom } from './modelUtils';
 
 interface PublicModelMetadata {
   readonly name?: string;
@@ -36,7 +38,7 @@ export async function loadPublicModelEnrichment(
     return new Map();
   }
 
-  const response = await fetch(publicModelsUrl, { signal });
+  const response = await fetchWithRetry(publicModelsUrl, {}, signal);
   if (!response.ok) {
     return new Map();
   }
@@ -252,20 +254,8 @@ function getContextWindowsFromEnrichment(
   enrichment: PublicModelEnrichment,
   modelText: string,
 ): number[] | undefined {
-  const maxWindow = Math.max(enrichment.maxInputTokens ?? 0, inferMaxContextWindow(modelText));
-  const windows = [200000, 400000, 1000000].filter((value) => value <= maxWindow);
+  const windows = getContextWindows(modelText, enrichment.maxInputTokens);
   return windows.length ? windows : undefined;
-}
-
-function inferMaxContextWindow(modelText: string): number {
-  if (
-    /^claude-(haiku|sonnet|opus)-/.test(modelText) ||
-    /^gemini-/.test(modelText) ||
-    /^gpt-5(\b|[.-])/.test(modelText)
-  ) {
-    return 1000000;
-  }
-  return 200000;
 }
 
 function normalizeKey(value: string): string {
@@ -296,8 +286,4 @@ function getPriceCategory(outputPer1M: number | undefined): 'low' | 'medium' | '
     return 'high';
   }
   return 'very_high';
-}
-
-function numberFrom(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }

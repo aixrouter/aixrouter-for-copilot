@@ -5,6 +5,8 @@ import type {
   StreamHandlers,
 } from './types';
 import { loadPublicModelEnrichment, mergePublicModelEnrichment } from './pricing';
+import { fetchWithRetry, fetchWithTimeout } from './http';
+import { getContextWindows, numberFrom } from './modelUtils';
 
 interface RawModel {
   readonly id?: string;
@@ -78,11 +80,10 @@ export class AIXRouterClient {
   ) {}
 
   async listModels(signal?: AbortSignal): Promise<AIXRouterModelConfig[]> {
-    const response = await fetch(buildEndpointUrl(this.baseUrl, 'openai', 'models'), {
+    const response = await fetchWithRetry(buildEndpointUrl(this.baseUrl, 'openai', 'models'), {
       method: 'GET',
       headers: this.headers(),
-      signal,
-    });
+    }, signal);
 
     if (!response.ok) {
       throw await createHttpError('Failed to load AIXRouter models', response);
@@ -166,15 +167,19 @@ export class AIXRouterClient {
     apiKind: AIXRouterApiKind,
     signal?: AbortSignal,
   ): Promise<Response> {
-    return fetch(buildEndpointUrl(this.baseUrl, apiKind, 'chat/completions'), {
-      method: 'POST',
-      headers: {
-        ...this.headers(),
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(request),
-      signal,
-    });
+    const endpoint = buildEndpointUrl(this.baseUrl, apiKind, 'chat/completions');
+    try {
+      return await fetchWithRetry(endpoint, {
+        method: 'POST',
+        headers: {
+          ...this.headers(),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(request),
+      }, signal);
+    } catch (error) {
+      throw fetchFailedError(endpoint, error);
+    }
   }
 
   private async streamClaudeMessage(
@@ -269,7 +274,7 @@ export class AIXRouterClient {
     request: ClaudeMessageRequest,
     signal?: AbortSignal,
   ): Promise<Response> {
-    return fetch(endpoint, {
+    return fetchWithTimeout(endpoint, {
       method: 'POST',
       headers: {
         ...this.headers(),
@@ -278,8 +283,7 @@ export class AIXRouterClient {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(request),
-      signal,
-    });
+    }, signal);
   }
 
   private async completeClaudeMessage(
@@ -902,31 +906,6 @@ function looksThinkingCapable(modelText: string): boolean {
     /\br1\b/,
     /\bqwen3\b/,
   ].some((pattern) => pattern.test(modelText));
-}
-
-function getContextWindows(modelText: string, apiContextWindow: number | undefined): number[] {
-  const maxWindow = Math.max(apiContextWindow ?? 0, inferMaxContextWindow(modelText));
-  return [200000, 400000, 1000000].filter((value) => value <= maxWindow);
-}
-
-function inferMaxContextWindow(modelText: string): number {
-  if (
-    /^gemini-/.test(modelText) ||
-    /^gpt-5(\b|[.-])/.test(modelText) ||
-    /^claude-(haiku|sonnet|opus)-/.test(modelText)
-  ) {
-    return 1000000;
-  }
-  return 200000;
-}
-
-function numberFrom(...values: unknown[]): number | undefined {
-  for (const value of values) {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return value;
-    }
-  }
-  return undefined;
 }
 
 function booleanFrom(...values: unknown[]): boolean | undefined {
