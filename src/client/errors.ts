@@ -66,9 +66,29 @@ export function stringFrom(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-export function fetchFailedError(endpoint: string, error: unknown): Error {
-  const cause = error instanceof Error ? error.message : String(error);
-  return new Error(`AIXRouter request to ${endpoint} failed before receiving an HTTP response. ${cause}`);
+export function fetchFailedError(endpoint: string, error: unknown, detail?: string): Error {
+  const cause = describeError(error);
+  const suffix = detail ? ` ${detail}` : '';
+  return new Error(`AIXRouter request to ${endpoint} failed before receiving an HTTP response.${suffix} ${cause}`);
+}
+
+function describeError(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return String(error);
+  }
+
+  const parts = [error.message];
+  const cause = (error as { cause?: unknown }).cause;
+  if (cause) {
+    parts.push(`Cause: ${describeError(cause)}`);
+  }
+
+  const code = (error as { code?: unknown }).code;
+  if (typeof code === 'string' && !parts.some((part) => part.includes(code))) {
+    parts.push(`Code: ${code}`);
+  }
+
+  return parts.join(' ');
 }
 
 export function emptyResponseError(source: string, preview: string): Error {

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Improve: Compact oversized chat history requests by dropping older complete turns while preserving system prompts and tool-call/result groups.
+- Improve: Add configurable `aixrouter.maxHistoryMessages` and `aixrouter.maxRequestBytes` limits for request compaction.
+
 ## 0.1.10
 
 - Fix: Match Anthropic model IDs that use dot minor versions, such as `claude-opus-4.8`, to LiteLLM's hyphenated catalog IDs.

@@ -4,15 +4,17 @@
  * their context_length / max_output_tokens against what the LiteLLM
  * fallback would produce.
  *
- * Usage:
- *   export AIXROUTER_API_KEY="sk-xxx"
- *   node scripts/validate-litellm.mjs
+ * Imports matching logic directly from src/models/litellmMatch.ts —
+ * no duplicated code.  Run:
+ *
+ *   AIXROUTER_API_KEY="sk-xxx" pnpm validate:litellm
  *
  * Optionally set AIXROUTER_BASE_URL (default: https://api.aixrouter.com)
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { findLiteLLMEntry } from '../src/models/litellmMatch.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -31,88 +33,7 @@ const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
 const litellmEntries = metadata.models;
 console.log(`📦 Loaded ${litellmEntries.length} LiteLLM entries (synced ${metadata.syncedAt})`);
 
-// ── LiteLLM matcher (mirror of src/models/litellmFallback.ts) ──────────
-function parseLiteLLMId(id) {
-  const segments = id.toLowerCase().split('/');
-  return { base: segments[segments.length - 1], segments };
-}
-
-function comparableBase(base) {
-  return base.replace(/^(claude-(?:haiku|sonnet|opus)-\d+)\.(\d+)$/i, '$1-$2');
-}
-
-function mergeEntries(entries, hint) {
-  if (entries.length === 1) return entries[0];
-
-  let maxInputTokens, maxOutputTokens, vision, toolCalling, reasoning;
-  let bestEntry = entries[0];
-  let bestInput = bestEntry.maxInputTokens ?? -1;
-  let hintedEntry;
-
-  for (const e of entries) {
-    if (e.maxInputTokens !== undefined) {
-      maxInputTokens = maxInputTokens === undefined ? e.maxInputTokens : Math.max(maxInputTokens, e.maxInputTokens);
-      if (e.maxInputTokens > bestInput) { bestInput = e.maxInputTokens; bestEntry = e; }
-    }
-    if (e.maxOutputTokens !== undefined) {
-      maxOutputTokens = maxOutputTokens === undefined ? e.maxOutputTokens : Math.max(maxOutputTokens, e.maxOutputTokens);
-    }
-    if (e.vision) vision = true;
-    if (e.toolCalling) toolCalling = true;
-    if (e.reasoning) reasoning = true;
-    if (hint && !hintedEntry) {
-      const p = parseLiteLLMId(e.id);
-      if (p.segments.some(s => s.includes(hint) || hint.includes(s))) {
-        hintedEntry = e;
-      }
-    }
-  }
-  const src = hintedEntry ?? bestEntry;
-  return { id: src.id, maxInputTokens, maxOutputTokens, vision, toolCalling, reasoning };
-}
-
-function isBoundarySubmatch(a, b) {
-  if (a === b) return true;
-  const shorter = a.length <= b.length ? a : b;
-  const longer = a.length <= b.length ? b : a;
-  if (!longer.startsWith(shorter) && !longer.endsWith(shorter)) return false;
-
-  let extra;
-  if (longer.startsWith(shorter)) {
-    extra = longer.slice(shorter.length);
-  } else {
-    extra = longer.slice(0, longer.length - shorter.length);
-  }
-
-  // Allow: leading dash + digits (e.g. "gpt-5-0125" extends "gpt-5")
-  if (/^-[-\d]/.test(extra) && !/[a-z]{2,}/i.test(extra.replace(/^-[-\d]+/, ''))) return true;
-  // Allow: "-preview", "-thinking", "-lite" suffixes
-  if (/^-(preview|thinking|lite)$/i.test(extra)) return true;
-
-  // Reject: anything else — "gpt-5" must NOT match "gpt-5-chat", "gpt-5.1",
-  // "glm-5-turbo" etc. which are entirely different model variants.
-  return false;
-}
-
-function findEntry(modelId, family) {
-  const needle = modelId.toLowerCase();
-  const needleBase = comparableBase(needle.split('/').pop() ?? needle);
-  const hint = family?.toLowerCase();
-
-  const baseMatches = litellmEntries.filter(e => comparableBase(parseLiteLLMId(e.id).base) === needleBase);
-  if (baseMatches.length > 0) {
-    return mergeEntries(baseMatches, hint);
-  }
-
-  const sub = litellmEntries.filter(e => {
-    const p = parseLiteLLMId(e.id);
-    return isBoundarySubmatch(needleBase, comparableBase(p.base));
-  });
-  if (sub.length > 0) {
-    return mergeEntries(sub, hint);
-  }
-  return undefined;
-}
+// ── LiteLLM matcher — imported directly from source, no mirror ───────
 
 // ── Fetch models from AIXRouter API ────────────────────────────────────
 async function fetchModels() {
@@ -152,7 +73,7 @@ for (const model of models) {
     : inferFamily(id);
 
   // LiteLLM fallback values
-  const entry = findEntry(id, family);
+  const entry = findLiteLLMEntry(id, family, litellmEntries);
   const litellmInput = entry?.maxInputTokens;
   const litellmOutput = entry?.maxOutputTokens;
 

@@ -1,4 +1,4 @@
-import type { AIXRouterModelConfig, AIXRouterPricing } from '../types.js';
+import type { AIXRouterModelConfig, AIXRouterPricing, ModelMetadataSources } from '../types.js';
 import { fetchTextWithRetry } from '../client/http.js';
 import { getContextWindows, numberFrom } from './modelUtils.js';
 
@@ -101,17 +101,50 @@ export function mergePublicModelEnrichment(
       enrichment.sourceType,
     ].filter(Boolean).join(' ').toLowerCase();
 
+    const maxInputTokens = maxNumberOrKeep(model.maxInputTokens, enrichment.maxInputTokens);
+    const maxOutputTokens = maxNumberOrKeep(model.maxOutputTokens, enrichment.maxOutputTokens);
+    const vision = model.vision === true || enrichment.vision === true ? true : model.vision ?? enrichment.vision;
+
+    // Recompute context windows if public catalog expanded the max input.
+    let contextWindows = model.contextWindows;
+    let contextWindowsSource = model.metadataSources?.contextWindows;
+    if (maxInputTokens !== undefined && model.maxInputTokens !== maxInputTokens) {
+      const fromEnrichment = getContextWindowsFromEnrichment(enrichment, modelText, maxInputTokens);
+      const merged = [...new Set([...(contextWindows ?? []), ...fromEnrichment])]
+        .filter((w) => w <= maxInputTokens)
+        .sort((a, b) => a - b);
+      if (merged.length > 0) {
+        contextWindows = merged;
+        contextWindowsSource = 'publicCatalog';
+      }
+    } else if (!model.contextWindows?.length) {
+      const generated = getContextWindowsFromEnrichment(enrichment, modelText, maxInputTokens);
+      if (generated.length > 0) {
+        contextWindows = generated;
+        contextWindowsSource = 'publicCatalog';
+      }
+    }
+
+    const sources: ModelMetadataSources = {
+      ...model.metadataSources,
+      maxInputTokens: pickSource(model.metadataSources?.maxInputTokens, 'publicCatalog', model.maxInputTokens !== maxInputTokens),
+      maxOutputTokens: pickSource(model.metadataSources?.maxOutputTokens, 'publicCatalog', model.maxOutputTokens !== maxOutputTokens),
+      vision: pickSource(model.metadataSources?.vision, 'publicCatalog', model.vision !== true && enrichment.vision === true),
+      contextWindows: contextWindowsSource,
+    };
+
     return {
       ...model,
       name: model.name ?? enrichment.name,
       family: isPlaceholderFamily(model.family) ? enrichment.family ?? model.family : model.family,
       sourceType: model.sourceType ?? enrichment.sourceType,
-      maxInputTokens: Math.max(model.maxInputTokens ?? 0, enrichment.maxInputTokens ?? 0) || model.maxInputTokens,
-      maxOutputTokens: Math.max(model.maxOutputTokens ?? 0, enrichment.maxOutputTokens ?? 0) || model.maxOutputTokens,
-      vision: model.vision === true || enrichment.vision === true ? true : model.vision ?? enrichment.vision,
-      contextWindows: model.contextWindows?.length ? model.contextWindows : getContextWindowsFromEnrichment(enrichment, modelText),
+      maxInputTokens,
+      maxOutputTokens,
+      vision,
+      contextWindows,
       pricing,
       priceCategory: model.priceCategory ?? getPriceCategory(pricing?.outputPer1M),
+      metadataSources: sources,
     };
   });
 }
@@ -248,9 +281,11 @@ function isPlaceholderFamily(value: string | undefined): boolean {
 function getContextWindowsFromEnrichment(
   enrichment: PublicModelEnrichment,
   modelText: string,
-): number[] | undefined {
-  const windows = getContextWindows(modelText, enrichment.maxInputTokens);
-  return windows.length ? windows : undefined;
+  maxInputTokens?: number,
+): number[] {
+  const effective = maxInputTokens ?? enrichment.maxInputTokens;
+  const windows = getContextWindows(modelText, effective);
+  return windows.filter((w) => w <= (effective ?? 128000));
 }
 
 function normalizeKey(value: string): string {
@@ -281,4 +316,19 @@ function getPriceCategory(outputPer1M: number | undefined): 'low' | 'medium' | '
     return 'high';
   }
   return 'very_high';
+}
+
+function maxNumberOrKeep(current: number | undefined, enrichment: number | undefined): number | undefined {
+  if (current === undefined) return enrichment;
+  if (enrichment === undefined) return current;
+  return Math.max(current, enrichment);
+}
+
+function pickSource(
+  existing: ModelMetadataSources[keyof ModelMetadataSources],
+  tier: NonNullable<ModelMetadataSources[keyof ModelMetadataSources]>,
+  changed: boolean,
+): ModelMetadataSources[keyof ModelMetadataSources] {
+  if (changed) return tier;
+  return existing;
 }

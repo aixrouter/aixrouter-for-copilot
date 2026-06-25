@@ -12,6 +12,26 @@ export interface AIXRouterModelConfig {
   readonly sourceType?: string;
   readonly pricing?: AIXRouterPricing;
   readonly priceCategory?: 'low' | 'medium' | 'high' | 'very_high';
+  /** Records which tier provided each capability field. For debugging only. */
+  readonly metadataSources?: ModelMetadataSources;
+}
+
+/**
+ * Tracks where each model capability value came from.
+ *
+ * Tiers (in priority order):
+ *   api           — returned directly by the AIXRouter /openai/v1/models endpoint
+ *   publicCatalog — from the AIXRouter public model catalog (pricing/family)
+ *   litellm       — from the bundled LiteLLM community metadata
+ *   heuristic     — name-based fallback defaults
+ */
+export interface ModelMetadataSources {
+  readonly maxInputTokens?: 'api' | 'publicCatalog' | 'litellm' | 'heuristic';
+  readonly maxOutputTokens?: 'api' | 'publicCatalog' | 'litellm' | 'heuristic';
+  readonly toolCalling?: 'api' | 'publicCatalog' | 'litellm' | 'heuristic';
+  readonly vision?: 'api' | 'publicCatalog' | 'litellm' | 'heuristic';
+  readonly thinking?: 'api' | 'publicCatalog' | 'litellm' | 'heuristic';
+  readonly contextWindows?: 'api' | 'publicCatalog' | 'litellm' | 'heuristic';
 }
 
 export interface AIXRouterPricing {

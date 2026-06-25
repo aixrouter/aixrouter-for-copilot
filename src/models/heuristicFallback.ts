@@ -1,4 +1,4 @@
-import type { AIXRouterModelConfig } from '../types.js';
+import type { AIXRouterModelConfig, ModelMetadataSources } from '../types.js';
 import { getContextWindows } from './modelUtils.js';
 
 /**
@@ -27,6 +27,16 @@ export function applyHeuristicFallbacks(models: AIXRouterModelConfig[]): AIXRout
         ? model.contextWindows
         : getContextWindows(modelText, maxInputTokens).filter((w) => w <= maxInputTokens);
 
+    const sources: ModelMetadataSources = {
+      ...model.metadataSources,
+      maxInputTokens: model.metadataSources?.maxInputTokens ?? (model.maxInputTokens === undefined ? 'heuristic' : undefined),
+      maxOutputTokens: model.metadataSources?.maxOutputTokens ?? (model.maxOutputTokens === undefined ? 'heuristic' : undefined),
+      toolCalling: model.metadataSources?.toolCalling ?? (model.toolCalling === undefined ? 'heuristic' : undefined),
+      vision: model.metadataSources?.vision ?? (model.vision === undefined ? 'heuristic' : undefined),
+      thinking: model.metadataSources?.thinking ?? (model.thinking === undefined ? 'heuristic' : undefined),
+      contextWindows: model.metadataSources?.contextWindows ?? (model.contextWindows === undefined || model.contextWindows.length === 0 ? 'heuristic' : undefined),
+    };
+
     return {
       ...model,
       maxInputTokens,
@@ -35,6 +45,7 @@ export function applyHeuristicFallbacks(models: AIXRouterModelConfig[]): AIXRout
       vision,
       thinking,
       contextWindows,
+      metadataSources: sources,
     };
   });
 }

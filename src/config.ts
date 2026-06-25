@@ -69,6 +69,16 @@ export function getPublicModelMetadataEnabled(): boolean {
   return getConfig().get('enrichPublicModelMetadata', true);
 }
 
+export function getMaxHistoryMessages(): number | undefined {
+  const value = getConfig().get('maxHistoryMessages', 100);
+  return value > 0 ? value : undefined;
+}
+
+export function getMaxRequestBytes(): number | undefined {
+  const value = getConfig().get('maxRequestBytes', 10_000_000);
+  return value > 0 ? value : undefined;
+}
+
 export function onConfigChanged(listener: () => void): vscode.Disposable {
   return vscode.workspace.onDidChangeConfiguration((event) => {
     if (event.affectsConfiguration(SECTION)) {

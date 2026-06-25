@@ -1,6 +1,7 @@
 import type {
   AIXRouterModelConfig,
   ChatCompletionRequest,
+  ModelMetadataSources,
   StreamHandlers,
 } from '../types.js';
 import { loadPublicModelEnrichment, mergePublicModelEnrichment } from '../models/pricing.js';
@@ -150,6 +151,9 @@ export class AIXRouterClient {
     // receives the request could double-charge on retry. Only GET endpoints
     // (model list, metadata) use fetchWithRetry.
     const endpoint = buildEndpointUrl(this.baseUrl, apiKind, 'chat/completions');
+    const body = JSON.stringify(request);
+    const bodyBytes = byteLength(body);
+    this.debug?.(`OpenAI request body bytes=${bodyBytes}`);
     try {
       return await fetchWithTimeout(endpoint, {
         method: 'POST',
@@ -157,10 +161,10 @@ export class AIXRouterClient {
           ...this.headers(),
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(request),
+        body,
       }, signal);
     } catch (error) {
-      throw fetchFailedError(endpoint, error);
+      throw fetchFailedError(endpoint, error, `Request body bytes=${bodyBytes}.`);
     }
   }
 
@@ -246,7 +250,8 @@ export class AIXRouterClient {
       try {
         return await this.fetchClaudeMessage(endpoint, request, signal);
       } catch (retryError) {
-        throw fetchFailedError(endpoint, retryError);
+        const bodyBytes = byteLength(JSON.stringify(request));
+        throw fetchFailedError(endpoint, retryError, `Request body bytes=${bodyBytes}.`);
       }
     }
   }
@@ -256,6 +261,8 @@ export class AIXRouterClient {
     request: ReturnType<typeof toClaudeMessageRequest>,
     signal?: AbortSignal,
   ): Promise<Response> {
+    const body = JSON.stringify(request);
+    this.debug?.(`Claude request body bytes=${byteLength(body)}`);
     return fetchWithTimeout(endpoint, {
       method: 'POST',
       headers: {
@@ -264,7 +271,7 @@ export class AIXRouterClient {
         'anthropic-version': '2023-06-01',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(request),
+      body,
     }, signal);
   }
 
@@ -274,11 +281,13 @@ export class AIXRouterClient {
     signal?: AbortSignal,
   ): Promise<void> {
     const endpoint = buildEndpointUrl(this.baseUrl, 'claude', 'messages');
+    const claudeRequest = toClaudeMessageRequest(request, false);
     let response: Response;
     try {
-      response = await this.fetchClaudeMessage(endpoint, toClaudeMessageRequest(request, false), signal);
+      response = await this.fetchClaudeMessage(endpoint, claudeRequest, signal);
     } catch (error) {
-      throw fetchFailedError(endpoint, error);
+      const bodyBytes = byteLength(JSON.stringify(claudeRequest));
+      throw fetchFailedError(endpoint, error, `Request body bytes=${bodyBytes}.`);
     }
 
     if (!response.ok) {
@@ -329,6 +338,14 @@ function toModelConfig(model: RawModel): AIXRouterModelConfig | undefined {
       : undefined,
     sourceType: model.type,
     pricing: toApiPricing(model),
+    metadataSources: {
+      maxInputTokens: apiContextLength !== undefined ? 'api' : undefined,
+      maxOutputTokens: apiMaxOutputTokens !== undefined ? 'api' : undefined,
+      toolCalling: hasCap(capabilities.tool_calling, capabilities.tools, capabilities.function_calling) ? 'api' : undefined,
+      vision: hasCap(capabilities.vision, capabilities.image_input, capabilities.imageInput, capabilities.multimodal, capabilities.multi_modal) ? 'api' : undefined,
+      thinking: hasCap(capabilities.reasoning, capabilities.thinking) ? 'api' : undefined,
+      contextWindows: apiContextLength !== undefined ? 'api' : undefined,
+    },
   };
 }
 
@@ -410,4 +427,16 @@ function booleanFrom(...values: unknown[]): boolean | undefined {
     }
   }
   return undefined;
+}
+
+/** Like booleanFrom but only checks for presence, doesn't return false. */
+function hasCap(...values: unknown[]): boolean {
+  for (const value of values) {
+    if (typeof value === 'boolean' && value) return true;
+  }
+  return false;
+}
+
+function byteLength(value: string): number {
+  return new TextEncoder().encode(value).byteLength;
 }

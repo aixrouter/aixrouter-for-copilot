@@ -1,18 +1,15 @@
 /**
  * Quick smoke test for the LiteLLM fallback matcher.
- * Run: npx tsx scripts/test-litellm-match.ts
+ *
+ * Imports the pure matching functions directly from source — no duplicated
+ * logic.  Run:  npx tsx scripts/test-litellm-match.ts
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-
-interface LiteLLMModelEntry {
-  readonly id: string;
-  readonly maxInputTokens?: number;
-  readonly maxOutputTokens?: number;
-  readonly vision?: boolean;
-  readonly toolCalling?: boolean;
-  readonly reasoning?: boolean;
-}
+import {
+  type LiteLLMModelEntry,
+  findLiteLLMEntry,
+} from '../src/models/litellmMatch.ts';
 
 interface LiteLLMMetadataFile {
   readonly source: string;
@@ -20,122 +17,6 @@ interface LiteLLMMetadataFile {
   readonly syncedAt: string;
   readonly modelCount: number;
   readonly models: LiteLLMModelEntry[];
-}
-
-interface ParsedId {
-  readonly base: string;
-  readonly segments: string[];
-}
-
-function parseLiteLLMId(id: string): ParsedId {
-  const segments = id.toLowerCase().split('/');
-  const base = segments[segments.length - 1];
-  return { base, segments };
-}
-
-function comparableBase(base: string): string {
-  return base.replace(/^(claude-(?:haiku|sonnet|opus)-\d+)\.(\d+)$/i, '$1-$2');
-}
-
-function mergeEntries(entries: LiteLLMModelEntry[], hint?: string): LiteLLMModelEntry {
-  if (entries.length === 1) return entries[0];
-
-  let maxInputTokens: number | undefined;
-  let maxOutputTokens: number | undefined;
-  let vision: boolean | undefined;
-  let toolCalling: boolean | undefined;
-  let reasoning: boolean | undefined;
-  let bestEntry: LiteLLMModelEntry = entries[0];
-  let bestInput = bestEntry.maxInputTokens ?? -1;
-  let hintedEntry: LiteLLMModelEntry | undefined;
-
-  for (const entry of entries) {
-    if (entry.maxInputTokens !== undefined) {
-      maxInputTokens = maxInputTokens === undefined
-        ? entry.maxInputTokens
-        : Math.max(maxInputTokens, entry.maxInputTokens);
-      if (entry.maxInputTokens > bestInput) {
-        bestInput = entry.maxInputTokens;
-        bestEntry = entry;
-      }
-    }
-    if (entry.maxOutputTokens !== undefined) {
-      maxOutputTokens = maxOutputTokens === undefined
-        ? entry.maxOutputTokens
-        : Math.max(maxOutputTokens, entry.maxOutputTokens);
-    }
-    if (entry.vision) vision = true;
-    if (entry.toolCalling) toolCalling = true;
-    if (entry.reasoning) reasoning = true;
-    if (hint && !hintedEntry) {
-      const parsed = parseLiteLLMId(entry.id);
-      if (parsed.segments.some((seg) => seg.includes(hint) || hint.includes(seg))) {
-        hintedEntry = entry;
-      }
-    }
-  }
-
-  const src = hintedEntry ?? bestEntry;
-  return {
-    id: src.id,
-    maxInputTokens,
-    maxOutputTokens,
-    vision,
-    toolCalling,
-    reasoning,
-  };
-}
-
-function isBoundarySubmatch(a: string, b: string): boolean {
-  if (a === b) return true;
-  const shorter = a.length <= b.length ? a : b;
-  const longer = a.length <= b.length ? b : a;
-  if (!longer.startsWith(shorter) && !longer.endsWith(shorter)) return false;
-
-  let extra: string;
-  if (longer.startsWith(shorter)) {
-    extra = longer.slice(shorter.length);
-  } else {
-    extra = longer.slice(0, longer.length - shorter.length);
-  }
-
-  // Allow: leading dash + digits (e.g. "gpt-5-0125" extends "gpt-5")
-  if (/^-[-\d]/.test(extra) && !/[a-z]{2,}/i.test(extra.replace(/^-[-\d]+/, ''))) return true;
-  // Allow: "-preview", "-thinking", "-lite" suffixes
-  if (/^-(preview|thinking|lite)$/i.test(extra)) return true;
-  return false;
-}
-
-function findEntry(
-  modelId: string,
-  family: string | undefined,
-  entries: LiteLLMModelEntry[],
-): LiteLLMModelEntry | undefined {
-  if (entries.length === 0) return undefined;
-
-  const needle = modelId.toLowerCase();
-  const needleBase = comparableBase(needle.split('/').pop() ?? needle);
-  const hint = family?.toLowerCase();
-
-  const baseMatches = entries.filter((entry) => {
-    const parsed = parseLiteLLMId(entry.id);
-    return comparableBase(parsed.base) === needleBase;
-  });
-
-  if (baseMatches.length > 0) {
-    return mergeEntries(baseMatches, hint);
-  }
-
-  const substringMatches = entries.filter((entry) => {
-    const parsed = parseLiteLLMId(entry.id);
-    return isBoundarySubmatch(needleBase, comparableBase(parsed.base));
-  });
-
-  if (substringMatches.length > 0) {
-    return mergeEntries(substringMatches, hint);
-  }
-
-  return undefined;
 }
 
 // --- Test ---
@@ -159,7 +40,7 @@ let passed = 0;
 let failed = 0;
 
 for (const tc of testCases) {
-  const entry = findEntry(tc.id, tc.family, entries);
+  const entry = findLiteLLMEntry(tc.id, tc.family, entries);
   const maxInput = entry?.maxInputTokens ?? 0;
   const ok = maxInput >= tc.expectMin;
   const status = ok ? '✅' : '❌';

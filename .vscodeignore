@@ -4,7 +4,9 @@
 .codex/**
 .vscode/**
 src/**
+test/**
 tsconfig.json
+vitest.config.ts
 pnpm-lock.yaml
 node_modules/**
 *.vsix

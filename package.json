@@ -158,6 +158,18 @@
           "default": true,
           "description": "Enrich model metadata from the public AIXRouter model catalog for supported AIXRouter and AgileRouter base URLs."
         },
+        "aixrouter.maxHistoryMessages": {
+          "type": "number",
+          "default": 100,
+          "minimum": 0,
+          "description": "Maximum converted chat history messages to send. Older complete turns are dropped first; 0 disables this limit."
+        },
+        "aixrouter.maxRequestBytes": {
+          "type": "number",
+          "default": 10000000,
+          "minimum": 0,
+          "description": "Maximum JSON request body size in bytes. Older complete turns are dropped first; 0 disables this limit."
+        },
         "aixrouter.debug": {
           "type": "boolean",
           "default": false,
@@ -171,12 +183,19 @@
     "sync-models": "node scripts/sync-model-metadata.mjs",
     "compile": "pnpm run clean && tsc -p ./",
     "watch": "pnpm run clean && tsc -watch -p ./",
-    "package": "pnpm run compile && pnpm exec vsce package --no-dependencies"
+    "package": "pnpm run compile && pnpm exec vsce package --no-dependencies",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "release": "node scripts/release.mjs",
+    "release:prepare": "node scripts/release.mjs --publish",
+    "validate:litellm": "tsx scripts/validate-litellm.mjs"
   },
   "devDependencies": {
     "@types/node": "20.19.1",
     "@types/vscode": "1.116.0",
     "@vscode/vsce": "3.6.0",
-    "typescript": "5.8.3"
+    "tsx": "^4.22.4",
+    "typescript": "5.8.3",
+    "vitest": "^4.1.9"
   }
 }

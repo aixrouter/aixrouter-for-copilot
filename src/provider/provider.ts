@@ -3,6 +3,8 @@ import { AuthStore } from '../auth.js';
 import {
   getBaseUrl,
   hasBaseUrl,
+  getMaxHistoryMessages,
+  getMaxRequestBytes,
   getMaxTokens,
   getPinnedModels,
   getPublicModelMetadataEnabled,
@@ -10,6 +12,7 @@ import {
   getTemperature,
 } from '../config.js';
 import { AIXRouterClient } from '../client/aixrouterClient.js';
+import { compactChatCompletionRequest } from '../compaction.js';
 import { convertMessages, convertTools, estimateTokenCount, summarizeMessageParts } from '../convert.js';
 import { Logger } from '../logger.js';
 import type { AIXRouterModelConfig, ChatCompletionRequest, ChatToolCall } from '../types.js';
@@ -102,12 +105,24 @@ export class AIXRouterChatProvider implements vscode.LanguageModelChatProvider {
     const disposable = token.onCancellationRequested(() => abort.abort());
 
     try {
-      const request = this.createRequest(model, messages, options as ModelOptions);
+      const compaction = compactChatCompletionRequest(
+        this.createRequest(model, messages, options as ModelOptions),
+        {
+          maxHistoryMessages: getMaxHistoryMessages(),
+          maxRequestBytes: getMaxRequestBytes(),
+        },
+      );
+      const request = compaction.request;
       const selectedContext = getConfiguredContextWindow(model, options as ModelOptions);
       this.logger.debug(`Model capabilities id=${model.id} vision=${model.vision === true} thinking=${model.thinking === true} toolCalling=${model.toolCalling !== false}`);
       this.logger.debug(`VS Code modelInfo capabilities imageInput=${modelInfo.capabilities.imageInput === true} toolCalling=${modelInfo.capabilities.toolCalling ?? false}`);
+      if (compaction.changed) {
+        this.logger.debug(`Compacted messages ${compaction.originalMessages}->${compaction.compactedMessages}; request bytes ${compaction.originalBytes}->${compaction.compactedBytes}`);
+      } else if (compaction.exceededByteLimit || compaction.exceededMessageLimit) {
+        this.logger.debug(`Request exceeds compaction limit but no older complete turn could be removed safely; messages=${compaction.compactedMessages} bytes=${compaction.compactedBytes}`);
+      }
       this.logger.debug(`POST model=${request.model} messages=${request.messages.length} images=${countImageParts(request)} tools=${request.tools?.length ?? 0} context=${selectedContext ?? 'default'}`);
-      this.logger.debug(`Input parts ${summarizeMessageParts(messages)}`);
+      this.logger.debug(`Original input parts ${summarizeMessageParts(messages)}`);
 
       await new AIXRouterClient(baseUrl, apiKey, true, (message) => this.logger.debug(message)).streamChatCompletion(
         request,
