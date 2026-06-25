@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.10
+
+- Fix: Match Anthropic model IDs that use dot minor versions, such as `claude-opus-4.8`, to LiteLLM's hyphenated catalog IDs.
+
 ## 0.1.9
 
 - Fix: Allow bundled LiteLLM metadata to expand model token and context-window capabilities above incomplete API/public catalog limits.

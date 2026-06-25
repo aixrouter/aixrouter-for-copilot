@@ -37,6 +37,10 @@ function parseLiteLLMId(id) {
   return { base: segments[segments.length - 1], segments };
 }
 
+function comparableBase(base) {
+  return base.replace(/^(claude-(?:haiku|sonnet|opus)-\d+)\.(\d+)$/i, '$1-$2');
+}
+
 function mergeEntries(entries, hint) {
   if (entries.length === 1) return entries[0];
 
@@ -92,17 +96,17 @@ function isBoundarySubmatch(a, b) {
 
 function findEntry(modelId, family) {
   const needle = modelId.toLowerCase();
-  const needleBase = needle.split('/').pop() ?? needle;
+  const needleBase = comparableBase(needle.split('/').pop() ?? needle);
   const hint = family?.toLowerCase();
 
-  const baseMatches = litellmEntries.filter(e => parseLiteLLMId(e.id).base === needleBase);
+  const baseMatches = litellmEntries.filter(e => comparableBase(parseLiteLLMId(e.id).base) === needleBase);
   if (baseMatches.length > 0) {
     return mergeEntries(baseMatches, hint);
   }
 
   const sub = litellmEntries.filter(e => {
     const p = parseLiteLLMId(e.id);
-    return isBoundarySubmatch(needleBase, p.base);
+    return isBoundarySubmatch(needleBase, comparableBase(p.base));
   });
   if (sub.length > 0) {
     return mergeEntries(sub, hint);

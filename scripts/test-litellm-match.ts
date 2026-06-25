@@ -33,6 +33,10 @@ function parseLiteLLMId(id: string): ParsedId {
   return { base, segments };
 }
 
+function comparableBase(base: string): string {
+  return base.replace(/^(claude-(?:haiku|sonnet|opus)-\d+)\.(\d+)$/i, '$1-$2');
+}
+
 function mergeEntries(entries: LiteLLMModelEntry[], hint?: string): LiteLLMModelEntry {
   if (entries.length === 1) return entries[0];
 
@@ -110,12 +114,12 @@ function findEntry(
   if (entries.length === 0) return undefined;
 
   const needle = modelId.toLowerCase();
-  const needleBase = needle.split('/').pop() ?? needle;
+  const needleBase = comparableBase(needle.split('/').pop() ?? needle);
   const hint = family?.toLowerCase();
 
   const baseMatches = entries.filter((entry) => {
     const parsed = parseLiteLLMId(entry.id);
-    return parsed.base === needleBase;
+    return comparableBase(parsed.base) === needleBase;
   });
 
   if (baseMatches.length > 0) {
@@ -124,7 +128,7 @@ function findEntry(
 
   const substringMatches = entries.filter((entry) => {
     const parsed = parseLiteLLMId(entry.id);
-    return isBoundarySubmatch(needleBase, parsed.base);
+    return isBoundarySubmatch(needleBase, comparableBase(parsed.base));
   });
 
   if (substringMatches.length > 0) {
@@ -143,6 +147,7 @@ const testCases = [
   { id: 'deepseek-v4-pro', family: 'deepseek', expectMin: 1000000, label: 'DeepSeek V4 Pro → 1M' },
   { id: 'deepseek-v4-flash', family: 'deepseek', expectMin: 1000000, label: 'DeepSeek V4 Flash → 1M' },
   { id: 'claude-sonnet-4-5', family: 'anthropic', expectMin: 200000, label: 'Claude Sonnet 4.5' },
+  { id: 'claude-opus-4.8', family: 'anthropic', expectMin: 1000000, label: 'Claude Opus 4.8' },
   { id: 'gpt-4o', family: 'openai', expectMin: 128000, label: 'GPT-4o' },
   { id: 'gemini-2.5-pro', family: 'google', expectMin: 1000000, label: 'Gemini 2.5 Pro → 1M' },
   { id: 'glm-4.6', family: 'zhipu', expectMin: 128000, label: 'GLM-4.6 (Zhipu)' },

@@ -71,6 +71,10 @@ function parseLiteLLMId(id: string): ParsedId {
   return { base, segments };
 }
 
+function comparableBase(base: string): string {
+  return base.replace(/^(claude-(?:haiku|sonnet|opus)-\d+)\.(\d+)$/i, '$1-$2');
+}
+
 /**
  * Checks if two model base names match under substring containment,
  * but only when the extra characters are a numeric or date/build suffix
@@ -195,13 +199,13 @@ function findEntry(modelId: string, family?: string): LiteLLMModelEntry | undefi
   if (entries.length === 0) return undefined;
 
   const needle = modelId.toLowerCase();
-  const needleBase = needle.split('/').pop() ?? needle;
+  const needleBase = comparableBase(needle.split('/').pop() ?? needle);
   const hint = family?.toLowerCase();
 
   // 1. Exact base-name matches.
   const baseMatches = entries.filter((entry) => {
     const parsed = parseLiteLLMId(entry.id);
-    return parsed.base === needleBase;
+    return comparableBase(parsed.base) === needleBase;
   });
 
   if (baseMatches.length > 0) {
@@ -217,7 +221,7 @@ function findEntry(modelId: string, family?: string): LiteLLMModelEntry | undefi
   // or "gpt-5.1" which are completely different model families.
   const substringMatches = entries.filter((entry) => {
     const parsed = parseLiteLLMId(entry.id);
-    return isBoundarySubmatch(needleBase, parsed.base);
+    return isBoundarySubmatch(needleBase, comparableBase(parsed.base));
   });
 
   if (substringMatches.length > 0) {
