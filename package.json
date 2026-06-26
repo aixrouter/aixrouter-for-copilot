@@ -158,18 +158,6 @@
           "default": true,
           "description": "Enrich model metadata from the public AIXRouter model catalog for supported AIXRouter and AgileRouter base URLs."
         },
-        "aixrouter.maxHistoryMessages": {
-          "type": "number",
-          "default": 100,
-          "minimum": 0,
-          "description": "Maximum converted chat history messages to send. Older complete turns are dropped first; 0 disables this limit."
-        },
-        "aixrouter.maxRequestBytes": {
-          "type": "number",
-          "default": 10000000,
-          "minimum": 0,
-          "description": "Maximum JSON request body size in bytes. Older complete turns are dropped first; 0 disables this limit."
-        },
         "aixrouter.debug": {
           "type": "boolean",
           "default": false,
