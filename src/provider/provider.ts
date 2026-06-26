@@ -12,6 +12,7 @@ import {
   getTemperature,
 } from '../config.js';
 import { AIXRouterClient } from '../client/aixrouterClient.js';
+import { AIXRouterHttpError } from '../client/errors.js';
 import { convertMessages, convertTools, countSanitizedToolSchemas, estimateTokenCount, summarizeMessageParts } from '../convert.js';
 import { Logger } from '../logger.js';
 import type { AIXRouterModelConfig, ChatCompletionRequest, ChatToolCall } from '../types.js';
@@ -140,7 +141,7 @@ export class AIXRouterChatProvider implements vscode.LanguageModelChatProvider {
       );
     } catch (error) {
       this.logger.error('Chat completion failed', error);
-      throw error;
+      throw toUserFacingLanguageModelError(error);
     } finally {
       disposable.dispose();
     }
@@ -249,6 +250,51 @@ function countImageParts(request: ChatCompletionRequest): number {
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function toUserFacingLanguageModelError(error: unknown): vscode.LanguageModelError {
+  const message = getErrorMessage(error) || 'AIXRouter request failed.';
+  let wrapped: vscode.LanguageModelError;
+
+  if (error instanceof AIXRouterHttpError) {
+    if (error.status === 401 || error.status === 403) {
+      wrapped = vscode.LanguageModelError.NoPermissions(message);
+    } else if (error.status === 402 || error.status === 429) {
+      wrapped = vscode.LanguageModelError.Blocked(message);
+    } else if (error.status === 404) {
+      wrapped = vscode.LanguageModelError.NotFound(message);
+    } else {
+      wrapped = new vscode.LanguageModelError(message);
+    }
+  } else if (error instanceof vscode.LanguageModelError) {
+    wrapped = error;
+  } else {
+    wrapped = new vscode.LanguageModelError(message);
+  }
+
+  return compactLanguageModelError(wrapped, message);
+}
+
+function compactLanguageModelError(
+  error: vscode.LanguageModelError,
+  message: string,
+): vscode.LanguageModelError {
+  overwriteErrorProperty(error, 'message', message);
+  overwriteErrorProperty(error, 'stack', `${error.name}: ${message}`);
+  overwriteErrorProperty(error, 'cause', undefined);
+  return error;
+}
+
+function overwriteErrorProperty(error: Error, key: 'message' | 'stack' | 'cause', value: unknown): void {
+  try {
+    Object.defineProperty(error, key, {
+      value,
+      configurable: true,
+      writable: true,
+    });
+  } catch {
+    // Keep the runtime-provided value when it cannot be replaced.
+  }
 }
 
 function isClaudeRouteHint(value: string): boolean {

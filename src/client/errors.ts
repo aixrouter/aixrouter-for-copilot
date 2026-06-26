@@ -1,3 +1,14 @@
+export class AIXRouterHttpError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly statusText: string,
+  ) {
+    super(message);
+    this.name = 'AIXRouterHttpError';
+  }
+}
+
 export async function createHttpError(prefix: string, response: Response): Promise<Error> {
   const body = await response.text().catch(() => '');
   const details = [
@@ -5,7 +16,11 @@ export async function createHttpError(prefix: string, response: Response): Promi
     extractErrorDetail(body),
   ].filter(Boolean).join(' ');
 
-  return new Error(`${prefix}: ${response.status} ${response.statusText}.${details ? ` ${details}` : ''}`);
+  return new AIXRouterHttpError(
+    `${prefix}: ${response.status} ${response.statusText}.${details ? ` ${details}` : ''}`,
+    response.status,
+    response.statusText,
+  );
 }
 
 export function friendlyStatusMessage(status: number): string | undefined {

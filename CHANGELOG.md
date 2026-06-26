@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.13
+
+- Fix: Present upstream HTTP failures such as insufficient balance as compact VS Code language model errors without leaking internal stack traces.
+
 ## 0.1.12
 
 - Improve: Sanitize forwarded tool schemas and add conservative OpenAI-compatible fallback handling for unsupported streaming and empty responses.
