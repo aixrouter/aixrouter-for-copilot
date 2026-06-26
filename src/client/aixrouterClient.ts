@@ -48,6 +48,12 @@ interface RawModel {
 
 type AIXRouterApiKind = 'openai' | 'claude';
 
+interface ChatCompletionOptions {
+  readonly signal?: AbortSignal;
+  readonly openAIStreamFallback?: boolean;
+  readonly diagnostics?: readonly string[];
+}
+
 export class AIXRouterClient {
   constructor(
     private readonly baseUrl: string,
@@ -84,17 +90,63 @@ export class AIXRouterClient {
     request: ChatCompletionRequest,
     routeHint: string | undefined,
     handlers: StreamHandlers,
-    signal?: AbortSignal,
+    options: ChatCompletionOptions | AbortSignal = {},
   ): Promise<void> {
+    const requestOptions = normalizeChatCompletionOptions(options);
+    const signal = requestOptions.signal;
     const apiKind = getChatApiKind(routeHint ?? request.model);
     if (apiKind === 'claude') {
       await this.streamClaudeMessage(request, handlers, signal);
       return;
     }
 
-    const response = await this.fetchChatCompletion(request, 'openai', signal);
+    await this.streamOpenAIChatCompletion(request, handlers, requestOptions);
+  }
 
+  private async streamOpenAIChatCompletion(
+    request: ChatCompletionRequest,
+    handlers: StreamHandlers,
+    options: ChatCompletionOptions,
+  ): Promise<void> {
+    let emptyRetryUsed = false;
+    let currentRequest = request;
+
+    while (true) {
+      try {
+        const response = await this.fetchChatCompletion(currentRequest, 'openai', options.signal, options.diagnostics);
+        await this.processOpenAIChatResponse(response, currentRequest, handlers, options);
+        return;
+      } catch (error) {
+        if (!emptyRetryUsed && isOpenAIEmptyResponseError(error) && !options.signal?.aborted) {
+          emptyRetryUsed = true;
+          this.debug?.(`OpenAI fallback reason=emptyResponse model=${request.model} messages=${request.messages.length} tools=${request.tools?.length ?? 0} stream=${currentRequest.stream}`);
+          currentRequest = { ...request, stream: currentRequest.stream };
+          continue;
+        }
+
+        throw error;
+      }
+    }
+  }
+
+  private async processOpenAIChatResponse(
+    response: Response,
+    request: ChatCompletionRequest,
+    handlers: StreamHandlers,
+    options: ChatCompletionOptions,
+  ): Promise<void> {
     if (!response.ok) {
+      if (
+        request.stream &&
+        options.openAIStreamFallback !== false &&
+        !options.signal?.aborted &&
+        await shouldFallbackOpenAIStream(response)
+      ) {
+        this.debug?.(`OpenAI fallback reason=streamUnsupported model=${request.model} messages=${request.messages.length} tools=${request.tools?.length ?? 0}`);
+        await this.completeOpenAIChatCompletion({ ...request, stream: false }, handlers, options);
+        return;
+      }
+
       throw await createHttpError('AIXRouter chat completion failed', response);
     }
 
@@ -108,10 +160,37 @@ export class AIXRouterClient {
       return;
     }
 
-    const reader = response.body.getReader();
+    const emitted = await this.processOpenAIStreamResponse(response, handlers);
+    if (!emitted) {
+      throw emptyResponseError('OpenAI stream', '');
+    }
+  }
+
+  private async completeOpenAIChatCompletion(
+    request: ChatCompletionRequest,
+    handlers: StreamHandlers,
+    options: ChatCompletionOptions,
+  ): Promise<void> {
+    const response = await this.fetchChatCompletion(request, 'openai', options.signal, options.diagnostics);
+    if (!response.ok) {
+      throw await createHttpError('AIXRouter chat completion failed', response);
+    }
+    await processOpenAIFullResponse(response, handlers);
+  }
+
+  private async processOpenAIStreamResponse(
+    response: Response,
+    handlers: StreamHandlers,
+  ): Promise<boolean> {
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('AIXRouter response body is empty.');
+    }
+
     const decoder = new TextDecoder();
     const toolCalls = new Map<number, ToolCallAccumulator>();
     let buffer = '';
+    let emitted = false;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -131,29 +210,32 @@ export class AIXRouterClient {
 
         const data = trimmed.slice('data:'.length).trim();
         if (data === '[DONE]') {
-          flushToolCalls(toolCalls, handlers);
-          return;
+          emitted = flushToolCalls(toolCalls, handlers) || emitted;
+          return emitted;
         }
 
-        processSseData(data, toolCalls, handlers);
+        emitted = processSseData(data, toolCalls, handlers) || emitted;
       }
     }
 
-    flushToolCalls(toolCalls, handlers);
+    emitted = flushToolCalls(toolCalls, handlers) || emitted;
+    return emitted;
   }
 
   private async fetchChatCompletion(
     request: ChatCompletionRequest,
     apiKind: AIXRouterApiKind,
     signal?: AbortSignal,
+    diagnostics: readonly string[] = [],
   ): Promise<Response> {
-    // POST chat/completions is not retried: a timeout after the upstream
-    // receives the request could double-charge on retry. Only GET endpoints
-    // (model list, metadata) use fetchWithRetry.
+    // Network-level POST failures are not retried: a timeout after the upstream
+    // receives the request could double-charge. Higher-level compatibility
+    // fallbacks are handled only after an HTTP response is received.
     const endpoint = buildEndpointUrl(this.baseUrl, apiKind, 'chat/completions');
     const body = JSON.stringify(request);
     const bodyBytes = byteLength(body);
-    this.debug?.(`OpenAI request body bytes=${bodyBytes}`);
+    const diagnosticSuffix = diagnostics.length ? ` ${diagnostics.join(' ')}` : '';
+    this.debug?.(`OpenAI request body bytes=${bodyBytes} stream=${request.stream} tools=${request.tools?.length ?? 0}${diagnosticSuffix}`);
     try {
       return await fetchWithTimeout(endpoint, {
         method: 'POST',
@@ -164,7 +246,7 @@ export class AIXRouterClient {
         body,
       }, signal);
     } catch (error) {
-      throw fetchFailedError(endpoint, error, `Request body bytes=${bodyBytes}.`);
+      throw fetchFailedError(endpoint, error, `Request body bytes=${bodyBytes}. stream=${request.stream} tools=${request.tools?.length ?? 0}${diagnosticSuffix}.`);
     }
   }
 
@@ -347,6 +429,33 @@ function toModelConfig(model: RawModel): AIXRouterModelConfig | undefined {
       contextWindows: apiContextLength !== undefined ? 'api' : undefined,
     },
   };
+}
+
+function normalizeChatCompletionOptions(options: ChatCompletionOptions | AbortSignal): ChatCompletionOptions {
+  if (isAbortSignal(options)) {
+    return { signal: options };
+  }
+  return options;
+}
+
+function isAbortSignal(value: unknown): value is AbortSignal {
+  return Boolean(value && typeof value === 'object' && 'aborted' in value && 'addEventListener' in value);
+}
+
+function isOpenAIEmptyResponseError(error: unknown): boolean {
+  return error instanceof Error &&
+    /^AIXRouter OpenAI (?:response|stream) did not contain any assistant text or tool call\./.test(error.message);
+}
+
+async function shouldFallbackOpenAIStream(response: Response): Promise<boolean> {
+  if (![400, 404, 415, 422, 501].includes(response.status)) {
+    return false;
+  }
+
+  const body = await response.clone().text().catch(() => '');
+  const detail = `${response.statusText} ${body}`.toLowerCase();
+  return /\b(stream|streaming|sse|event-stream)\b/.test(detail) &&
+    /\b(unsupported|not supported|not_support|invalid|disable|disabled|not allowed|unrecognized|unknown)\b/.test(detail);
 }
 
 function toApiPricing(model: RawModel): AIXRouterModelConfig['pricing'] {

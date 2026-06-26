@@ -74,6 +74,10 @@ export function getRequestCompatibilityMode(): RequestCompatibilityMode {
   return value === 'full' ? 'full' : 'stable';
 }
 
+export function getOpenAIStreamFallbackEnabled(): boolean {
+  return getConfig().get('openAIStreamFallback', true);
+}
+
 export function onConfigChanged(listener: () => void): vscode.Disposable {
   return vscode.workspace.onDidChangeConfiguration((event) => {
     if (event.affectsConfiguration(SECTION)) {

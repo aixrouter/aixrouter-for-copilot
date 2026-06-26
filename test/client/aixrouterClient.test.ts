@@ -1,0 +1,153 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ChatCompletionRequest, StreamHandlers } from '../../src/types.js';
+
+vi.mock('vscode', () => ({
+  Uri: {
+    joinPath: (...parts: Array<{ fsPath?: string } | string>) => ({
+      fsPath: parts.map((part) => typeof part === 'string' ? part : part.fsPath ?? '').join('/'),
+    }),
+  },
+}));
+
+const { AIXRouterClient } = await import('../../src/client/aixrouterClient.js');
+
+describe('AIXRouterClient OpenAI compatibility fallbacks', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('retries once with stream=false when upstream explicitly rejects streaming', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ error: { message: 'stream is unsupported' } }, 400))
+      .mockResolvedValueOnce(jsonResponse({
+        choices: [{ message: { content: 'ok' } }],
+      }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const events = createEvents();
+    await new AIXRouterClient('https://api.example.test', 'key').streamChatCompletion(
+      baseRequest(),
+      'deepseek-v4-pro',
+      events.handlers,
+      { openAIStreamFallback: true },
+    );
+
+    expect(events.text).toEqual(['ok']);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(String(fetchMock.mock.calls[1]![1]!.body))).toMatchObject({ stream: false });
+  });
+
+  it('does not fallback to non-stream for rate limits or server errors', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ error: { message: 'rate limited' } }, 429));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(new AIXRouterClient('https://api.example.test', 'key').streamChatCompletion(
+      baseRequest(),
+      'deepseek-v4-pro',
+      createEvents().handlers,
+      { openAIStreamFallback: true },
+    )).rejects.toThrow(/429/);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry POST requests that fail before an HTTP response', async () => {
+    const fetchMock = vi.fn().mockRejectedValueOnce(new TypeError('fetch failed'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(new AIXRouterClient('https://api.example.test', 'key').streamChatCompletion(
+      baseRequest(),
+      'deepseek-v4-pro',
+      createEvents().handlers,
+      { openAIStreamFallback: true },
+    )).rejects.toThrow(/failed before receiving an HTTP response/);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries an empty OpenAI response once', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(sseResponse('data: [DONE]\n\n'))
+      .mockResolvedValueOnce(jsonResponse({
+        choices: [{ message: { content: 'after retry' } }],
+      }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const events = createEvents();
+    await new AIXRouterClient('https://api.example.test', 'key').streamChatCompletion(
+      baseRequest(),
+      'deepseek-v4-pro',
+      events.handlers,
+      { openAIStreamFallback: true },
+    );
+
+    expect(events.text).toEqual(['after retry']);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry after text has already been emitted', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(sseResponse([
+        'data: {"choices":[{"delta":{"content":"hello"}}]}',
+        'data: [DONE]',
+        '',
+      ].join('\n\n')));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const events = createEvents();
+    await new AIXRouterClient('https://api.example.test', 'key').streamChatCompletion(
+      baseRequest(),
+      'deepseek-v4-pro',
+      events.handlers,
+      { openAIStreamFallback: true },
+    );
+
+    expect(events.text).toEqual(['hello']);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+function baseRequest(): ChatCompletionRequest {
+  return {
+    model: 'deepseek-v4-pro',
+    messages: [{ role: 'user', content: 'hello' }],
+    stream: true,
+  };
+}
+
+function createEvents(): {
+  text: string[];
+  thinking: string[];
+  tools: unknown[];
+  handlers: StreamHandlers;
+} {
+  const text: string[] = [];
+  const thinking: string[] = [];
+  const tools: unknown[] = [];
+  return {
+    text,
+    thinking,
+    tools,
+    handlers: {
+      onText: (value) => text.push(value),
+      onThinking: (value) => thinking.push(value),
+      onToolCall: (value) => tools.push(value),
+      onUsage: () => undefined,
+    },
+  };
+}
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  });
+}
+
+function sseResponse(body: string): Response {
+  return new Response(body, {
+    status: 200,
+    headers: { 'content-type': 'text/event-stream' },
+  });
+}

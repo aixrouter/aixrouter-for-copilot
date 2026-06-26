@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.12
+
+- Improve: Sanitize forwarded tool schemas and add conservative OpenAI-compatible fallback handling for unsupported streaming and empty responses.
+
 ## 0.1.11
 
 - Improve: Add `aixrouter.compatibilityMode` with a stable default that omits optional routing/thinking hints from chat requests for better upstream compatibility.

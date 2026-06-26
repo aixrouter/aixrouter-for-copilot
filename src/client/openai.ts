@@ -11,12 +11,12 @@ export function processSseData(
   data: string,
   toolCalls: Map<number, ToolCallAccumulator>,
   handlers: StreamHandlers,
-): void {
+): boolean {
   let json: any;
   try {
     json = JSON.parse(data);
   } catch {
-    return;
+    return false;
   }
 
   if (json.usage) {
@@ -25,16 +25,19 @@ export function processSseData(
 
   const delta = json.choices?.[0]?.delta;
   if (!delta) {
-    return;
+    return false;
   }
 
+  let emitted = false;
   if (typeof delta.content === 'string' && delta.content.length > 0) {
     handlers.onText(delta.content);
+    emitted = true;
   }
 
   const thinking = delta.reasoning_content ?? delta.reasoning;
   if (typeof thinking === 'string' && thinking.length > 0) {
     handlers.onThinking(thinking);
+    emitted = true;
   }
 
   for (const rawToolCall of delta.tool_calls ?? []) {
@@ -42,7 +45,12 @@ export function processSseData(
     const current = toolCalls.get(index) ?? { id: '', name: '', arguments: '' };
     applyToolCallDelta(current, rawToolCall);
     toolCalls.set(index, current);
+    if (current.name) {
+      emitted = true;
+    }
   }
+
+  return emitted;
 }
 
 export function applyToolCallDelta(current: ToolCallAccumulator, rawToolCall: any): void {
@@ -63,7 +71,8 @@ export function applyToolCallDelta(current: ToolCallAccumulator, rawToolCall: an
 export function flushToolCalls(
   toolCalls: Map<number, ToolCallAccumulator>,
   handlers: StreamHandlers,
-): void {
+): boolean {
+  let emitted = false;
   for (const [index, toolCall] of [...toolCalls.entries()].sort(([a], [b]) => a - b)) {
     if (!toolCall.name) {
       continue;
@@ -76,8 +85,10 @@ export function flushToolCalls(
         arguments: toolCall.arguments || toolCall.argumentsFallback || '{}',
       },
     });
+    emitted = true;
   }
   toolCalls.clear();
+  return emitted;
 }
 
 export async function processOpenAIFullResponse(

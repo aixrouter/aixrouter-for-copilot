@@ -2,6 +2,19 @@ import * as vscode from 'vscode';
 import { Buffer } from 'node:buffer';
 import type { ChatMessage, ChatTool, ChatToolCall, OpenAIContentPart } from './types';
 
+const UNSUPPORTED_TOOL_SCHEMA_KEYS = new Set([
+  'defaultSnippets',
+  'deprecationMessage',
+  'doNotSuggest',
+  'enumDescriptions',
+  'errorMessage',
+  'markdownDeprecationMessage',
+  'markdownDescription',
+  'markdownEnumDescriptions',
+  'patternErrorMessage',
+  'suggestSortText',
+]);
+
 export function convertMessages(
   messages: readonly vscode.LanguageModelChatRequestMessage[],
 ): ChatMessage[] {
@@ -90,9 +103,49 @@ export function convertTools(
     function: {
       name: tool.name,
       description: tool.description,
-      parameters: tool.inputSchema as Record<string, unknown> | undefined,
+      parameters: sanitizeToolSchema(tool.inputSchema),
     },
   }));
+}
+
+export function countSanitizedToolSchemas(
+  tools: readonly vscode.LanguageModelChatTool[] | undefined,
+): number {
+  if (!tools?.length) {
+    return 0;
+  }
+
+  return tools.filter((tool) => {
+    const sanitized = sanitizeToolSchema(tool.inputSchema);
+    return JSON.stringify(sanitized) !== JSON.stringify(tool.inputSchema ?? undefined);
+  }).length;
+}
+
+export function sanitizeToolSchema(value: unknown): Record<string, unknown> | undefined {
+  const sanitized = sanitizeToolSchemaValue(value);
+  return sanitized && typeof sanitized === 'object' && !Array.isArray(sanitized)
+    ? sanitized as Record<string, unknown>
+    : undefined;
+}
+
+function sanitizeToolSchemaValue(value: unknown): unknown {
+  if (typeof value === 'string') {
+    return value.replace(/\{\d+\}/g, 'value');
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeToolSchemaValue(item));
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([key]) => !UNSUPPORTED_TOOL_SCHEMA_KEYS.has(key))
+        .map(([key, nested]) => [key, sanitizeToolSchemaValue(nested)]),
+    );
+  }
+
+  return value;
 }
 
 export function estimateTokenCount(text: string | vscode.LanguageModelChatRequestMessage): number {

@@ -5,13 +5,14 @@ import {
   hasBaseUrl,
   getMaxTokens,
   getPinnedModels,
+  getOpenAIStreamFallbackEnabled,
   getPublicModelMetadataEnabled,
   getReasoningEffort,
   getRequestCompatibilityMode,
   getTemperature,
 } from '../config.js';
 import { AIXRouterClient } from '../client/aixrouterClient.js';
-import { convertMessages, convertTools, estimateTokenCount, summarizeMessageParts } from '../convert.js';
+import { convertMessages, convertTools, countSanitizedToolSchemas, estimateTokenCount, summarizeMessageParts } from '../convert.js';
 import { Logger } from '../logger.js';
 import type { AIXRouterModelConfig, ChatCompletionRequest, ChatToolCall } from '../types.js';
 import {
@@ -110,10 +111,12 @@ export class AIXRouterChatProvider implements vscode.LanguageModelChatProvider {
       const compatibility = applyRequestCompatibility(rawRequest, compatibilityMode);
       const request = compatibility.request;
       const selectedContext = getConfiguredContextWindow(model, options as ModelOptions);
+      const openAIStreamFallback = getOpenAIStreamFallbackEnabled();
+      const sanitizedToolSchemas = countSanitizedToolSchemas((options as ModelOptions).tools);
       this.logger.debug(`Model capabilities id=${model.id} vision=${model.vision === true} thinking=${model.thinking === true} toolCalling=${model.toolCalling !== false}`);
       this.logger.debug(`VS Code modelInfo capabilities imageInput=${modelInfo.capabilities.imageInput === true} toolCalling=${modelInfo.capabilities.toolCalling ?? false}`);
       this.logger.debug(`Request compatibility mode=${compatibilityMode}${compatibility.omitted.length ? ` omitted=${compatibility.omitted.join(',')}` : ''}`);
-      this.logger.debug(`POST model=${request.model} messages=${request.messages.length} images=${countImageParts(request)} tools=${request.tools?.length ?? 0} context=${selectedContext ?? 'default'}`);
+      this.logger.debug(`POST model=${request.model} messages=${request.messages.length} images=${countImageParts(request)} tools=${request.tools?.length ?? 0} sanitizedToolSchemas=${sanitizedToolSchemas} context=${selectedContext ?? 'default'} openAIStreamFallback=${openAIStreamFallback}`);
       this.logger.debug(`Input parts ${summarizeMessageParts(messages)}`);
 
       await new AIXRouterClient(baseUrl, apiKey, true, (message) => this.logger.debug(message)).streamChatCompletion(
@@ -125,7 +128,15 @@ export class AIXRouterChatProvider implements vscode.LanguageModelChatProvider {
           onToolCall: (toolCall) => reportToolCall(progress, toolCall),
           onUsage: (usage) => reportUsage(progress, usage),
         },
-        abort.signal,
+        {
+          signal: abort.signal,
+          openAIStreamFallback,
+          diagnostics: [
+            `compatibility=${compatibilityMode}`,
+            `tools=${request.tools?.length ?? 0}`,
+            `messages=${request.messages.length}`,
+          ],
+        },
       );
     } catch (error) {
       this.logger.error('Chat completion failed', error);

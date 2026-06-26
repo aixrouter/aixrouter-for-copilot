@@ -45,7 +45,7 @@ export interface AIXRouterPricing {
 export interface ChatCompletionRequest {
   readonly model: string;
   readonly messages: ChatMessage[];
-  readonly stream: true;
+  readonly stream: boolean;
   readonly tools?: ChatTool[];
   readonly tool_choice?: 'auto';
   readonly max_tokens?: number;
