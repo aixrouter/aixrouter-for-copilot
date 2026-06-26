@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { AIXRouterModelConfig } from './types';
+import type { AIXRouterModelConfig, RequestCompatibilityMode } from './types';
 
 const SECTION = 'aixrouter';
 const DEFAULT_BASE_URL = 'https://api.aixrouter.com';
@@ -67,6 +67,11 @@ export function getDebugEnabled(): boolean {
 
 export function getPublicModelMetadataEnabled(): boolean {
   return getConfig().get('enrichPublicModelMetadata', true);
+}
+
+export function getRequestCompatibilityMode(): RequestCompatibilityMode {
+  const value = getConfig().get<RequestCompatibilityMode>('compatibilityMode', 'stable');
+  return value === 'full' ? 'full' : 'stable';
 }
 
 export function onConfigChanged(listener: () => void): vscode.Disposable {

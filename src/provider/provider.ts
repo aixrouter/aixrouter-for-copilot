@@ -7,6 +7,7 @@ import {
   getPinnedModels,
   getPublicModelMetadataEnabled,
   getReasoningEffort,
+  getRequestCompatibilityMode,
   getTemperature,
 } from '../config.js';
 import { AIXRouterClient } from '../client/aixrouterClient.js';
@@ -20,6 +21,7 @@ import {
   getContextWindowOptions,
   type ModelPickerInfo,
 } from './modelInfo.js';
+import { applyRequestCompatibility } from './requestCompatibility.js';
 
 type ModelOptions = vscode.ProvideLanguageModelChatResponseOptions & {
   readonly modelConfiguration?: Record<string, unknown>;
@@ -102,16 +104,21 @@ export class AIXRouterChatProvider implements vscode.LanguageModelChatProvider {
     const disposable = token.onCancellationRequested(() => abort.abort());
 
     try {
-      const request = this.createRequest(model, messages, options as ModelOptions);
+      const rawRequest = this.createRequest(model, messages, options as ModelOptions);
+      const routeHint = getModelRouteHint(model);
+      const compatibilityMode = isClaudeRouteHint(routeHint) ? 'full' : getRequestCompatibilityMode();
+      const compatibility = applyRequestCompatibility(rawRequest, compatibilityMode);
+      const request = compatibility.request;
       const selectedContext = getConfiguredContextWindow(model, options as ModelOptions);
       this.logger.debug(`Model capabilities id=${model.id} vision=${model.vision === true} thinking=${model.thinking === true} toolCalling=${model.toolCalling !== false}`);
       this.logger.debug(`VS Code modelInfo capabilities imageInput=${modelInfo.capabilities.imageInput === true} toolCalling=${modelInfo.capabilities.toolCalling ?? false}`);
+      this.logger.debug(`Request compatibility mode=${compatibilityMode}${compatibility.omitted.length ? ` omitted=${compatibility.omitted.join(',')}` : ''}`);
       this.logger.debug(`POST model=${request.model} messages=${request.messages.length} images=${countImageParts(request)} tools=${request.tools?.length ?? 0} context=${selectedContext ?? 'default'}`);
       this.logger.debug(`Input parts ${summarizeMessageParts(messages)}`);
 
       await new AIXRouterClient(baseUrl, apiKey, true, (message) => this.logger.debug(message)).streamChatCompletion(
         request,
-        getModelRouteHint(model),
+        routeHint,
         {
           onText: (text) => progress.report(new vscode.LanguageModelTextPart(text)),
           onThinking: (text) => reportThinking(progress, text),
@@ -231,6 +238,11 @@ function countImageParts(request: ChatCompletionRequest): number {
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function isClaudeRouteHint(value: string): boolean {
+  const normalized = value.toLowerCase();
+  return normalized.startsWith('claude-') || normalized.includes('/claude-') || normalized.includes('anthropic');
 }
 
 function getConfiguredReasoningEffort(

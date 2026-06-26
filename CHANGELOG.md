@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.11
+
+- Improve: Add `aixrouter.compatibilityMode` with a stable default that omits optional routing/thinking hints from chat requests for better upstream compatibility.
+
 ## 0.1.10
 
 - Fix: Match Anthropic model IDs that use dot minor versions, such as `claude-opus-4.8`, to LiteLLM's hyphenated catalog IDs.

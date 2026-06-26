@@ -2,7 +2,7 @@
   "name": "aixrouter-for-copilot",
   "displayName": "AIXRouter for Copilot",
   "description": "Use AIXRouter models directly from the GitHub Copilot Chat model picker. BYOK, vision-capable models, thinking mode, and agent tools.",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "packageManager": "pnpm@9.15.9",
   "publisher": "aixrouter",
   "icon": "resources/icon.png",
@@ -157,6 +157,19 @@
           "type": "boolean",
           "default": true,
           "description": "Enrich model metadata from the public AIXRouter model catalog for supported AIXRouter and AgileRouter base URLs."
+        },
+        "aixrouter.compatibilityMode": {
+          "type": "string",
+          "default": "stable",
+          "enum": [
+            "stable",
+            "full"
+          ],
+          "enumDescriptions": [
+            "Send a conservative OpenAI-compatible request shape and omit optional AIXRouter routing/thinking hints on OpenAI-compatible routes.",
+            "Send all supported AIXRouter request options, including context_window and reasoning_effort when selected."
+          ],
+          "description": "Controls optional request fields sent to AIXRouter. Stable mode can improve compatibility with OpenAI-compatible upstream routes."
         },
         "aixrouter.debug": {
           "type": "boolean",

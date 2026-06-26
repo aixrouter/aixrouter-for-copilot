@@ -54,6 +54,8 @@ export interface ChatCompletionRequest {
   readonly reasoning_effort?: 'low' | 'medium' | 'high' | 'max';
 }
 
+export type RequestCompatibilityMode = 'stable' | 'full';
+
 export type ChatMessage =
   | {
       role: 'user' | 'assistant' | 'system';
