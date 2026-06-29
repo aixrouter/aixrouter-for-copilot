@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.25
+
+- Chore: Refresh the extension icon.
+
 ## 0.1.24
 
 - Fix: Surface upstream SSE error frames (e.g. `data: {"error":{"code":"limited","type":"rate_limit_error",...}}`) as a typed `AIXRouterUpstreamError` instead of silently dropping them — users previously saw only the generic `OpenAI stream did not contain any assistant text or tool call.` even when the real cause was an upstream rate limit. The error message now includes `code`, `type`, and `request_id` from the provider payload.
