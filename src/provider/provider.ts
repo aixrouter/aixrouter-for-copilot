@@ -219,6 +219,9 @@ export class AIXRouterChatProvider implements vscode.LanguageModelChatProvider {
     options: ModelOptions,
   ): ChatCompletionRequest {
     const tools = model.toolCalling === false ? undefined : convertTools(options.tools);
+    const toolChoice: ChatCompletionRequest['tool_choice'] = tools?.length
+      ? (options.toolMode === vscode.LanguageModelChatToolMode.Required ? 'required' : 'auto')
+      : undefined;
     // Only send max_tokens when the user explicitly sets aixrouter.maxTokens > 0,
     // so that 0 means "provider default" as documented.
     const maxTokens = getMaxTokens();
@@ -231,7 +234,7 @@ export class AIXRouterChatProvider implements vscode.LanguageModelChatProvider {
       messages: convertMessages(messages),
       stream: true,
       tools,
-      tool_choice: tools?.length ? 'auto' : undefined,
+      tool_choice: toolChoice,
       max_tokens: maxTokens,
       context_window: contextWindow,
       temperature,

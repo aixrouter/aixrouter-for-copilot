@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.21
+
+- Improve: Add a third Claude cache breakpoint on the latest user message so prompt caching is owned by the extension rather than implicit upstream behavior.
+- Improve: Map VS Code's `LanguageModelChatToolMode.Required` to Claude's `tool_choice: { type: 'any' }` (previously dropped, leaving the model free to skip tools).
+- Improve: Log tool argument JSON parse failures so malformed `tool_calls` from the agent are easier to diagnose.
+- Improve: Surface `cacheBreakpoints` in the Claude request debug summary.
+- Refactor: Split Claude stream event handling from non-stream full-response parsing for clearer, slightly cheaper per-event work.
+
 ## 0.1.20
 
 - Improve: Apply Anthropic prompt caching breakpoints on Claude `system` block and the last `tools` entry to cut repeated per-request cost for large tool sets.

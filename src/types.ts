@@ -48,7 +48,7 @@ export interface ChatCompletionRequest {
   readonly messages: ChatMessage[];
   readonly stream: boolean;
   readonly tools?: ChatTool[];
-  readonly tool_choice?: 'auto';
+  readonly tool_choice?: 'auto' | 'required';
   readonly max_tokens?: number;
   readonly context_window?: number;
   readonly temperature?: number;

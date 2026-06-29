@@ -39,7 +39,7 @@ describe('toClaudeMessageRequest', () => {
     expect(result).toEqual({
       model: 'claude-sonnet-4.5',
       system: [{ type: 'text', text: 'be concise', cache_control: { type: 'ephemeral' } }],
-      messages: [{ role: 'user', content: [{ type: 'text', text: 'hello' }] }],
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'hello', cache_control: { type: 'ephemeral' } }] }],
       stream: true,
       tools: [{
         name: 'lookup',
@@ -85,7 +85,7 @@ describe('toClaudeMessageRequest', () => {
     expect(result.messages).toEqual([
       { role: 'user', content: [{ type: 'text', text: 'look this up' }] },
       { role: 'assistant', content: [{ type: 'tool_use', id: 'call_1', name: 'lookup', input: { query: 'aix' } }] },
-      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'call_1', content: 'found it' }] },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'call_1', content: 'found it', cache_control: { type: 'ephemeral' } }] },
     ]);
   });
 
@@ -109,8 +109,48 @@ describe('toClaudeMessageRequest', () => {
     }, true);
 
     expect(result.messages).toEqual([
-      { role: 'user', content: [{ type: 'text', text: '你好' }] },
+      { role: 'user', content: [{ type: 'text', text: '你好', cache_control: { type: 'ephemeral' } }] },
     ]);
+  });
+
+  it('maps required tool_choice to Claude any', () => {
+    const result = toClaudeMessageRequest({
+      model: 'claude-sonnet-4.5',
+      messages: [{ role: 'user', content: 'force the tool' }],
+      stream: true,
+      tools: [
+        { type: 'function', function: { name: 'lookup', parameters: {} } },
+      ],
+      tool_choice: 'required',
+    }, true);
+
+    expect(result.tool_choice).toEqual({ type: 'any' });
+  });
+
+  it('logs tool argument parse failures via the debug callback', () => {
+    const logs: string[] = [];
+    toClaudeMessageRequest({
+      model: 'claude-sonnet-4.5',
+      messages: [
+        { role: 'user', content: 'do it' },
+        {
+          role: 'assistant',
+          content: '',
+          tool_calls: [{
+            id: 'call_bad',
+            type: 'function',
+            function: { name: 'lookup', arguments: '{not json' },
+          }],
+        },
+        { role: 'tool', tool_call_id: 'call_bad', content: 'ok' },
+      ],
+      stream: true,
+      tools: [
+        { type: 'function', function: { name: 'lookup', parameters: {} } },
+      ],
+    }, true, (msg) => logs.push(msg));
+
+    expect(logs.some((line) => line.includes('Claude tool arguments JSON parse failed') && line.includes('name=lookup'))).toBe(true);
   });
 
   it('marks only the last Claude tool with cache_control', () => {

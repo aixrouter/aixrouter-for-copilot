@@ -256,7 +256,7 @@ export class AIXRouterClient {
     signal?: AbortSignal,
   ): Promise<void> {
     const endpoint = buildEndpointUrl(this.baseUrl, 'claude', 'messages');
-    const claudeRequest = toClaudeMessageRequest(request, true);
+    const claudeRequest = toClaudeMessageRequest(request, true, this.debug);
     this.debug?.(`Claude request ${summarizeClaudeRequest(endpoint, claudeRequest)}`);
 
     const response = await this.fetchClaudeMessageWithRetry(endpoint, claudeRequest, signal);
@@ -363,7 +363,7 @@ export class AIXRouterClient {
     signal?: AbortSignal,
   ): Promise<void> {
     const endpoint = buildEndpointUrl(this.baseUrl, 'claude', 'messages');
-    const claudeRequest = toClaudeMessageRequest(request, false);
+    const claudeRequest = toClaudeMessageRequest(request, false, this.debug);
     let response: Response;
     try {
       response = await this.fetchClaudeMessage(endpoint, claudeRequest, signal);

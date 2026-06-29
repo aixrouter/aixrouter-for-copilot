@@ -18,9 +18,9 @@ export interface ClaudeMessageRequest {
   readonly thinking?: ClaudeThinking;
 }
 
-export interface ClaudeToolChoice {
-  readonly type: 'auto';
-}
+export type ClaudeToolChoice =
+  | { readonly type: 'auto' }
+  | { readonly type: 'any' };
 
 export interface ClaudeThinking {
   readonly type: 'enabled';
@@ -43,10 +43,10 @@ export interface ClaudeMessage {
 }
 
 export type ClaudeContentBlock =
-  | { readonly type: 'text'; readonly text: string }
-  | { readonly type: 'image'; readonly source: { readonly type: 'base64'; readonly media_type: string; readonly data: string } }
-  | { readonly type: 'tool_use'; readonly id: string; readonly name: string; readonly input: unknown }
-  | { readonly type: 'tool_result'; readonly tool_use_id: string; readonly content: string };
+  | { readonly type: 'text'; readonly text: string; readonly cache_control?: ClaudeCacheControl }
+  | { readonly type: 'image'; readonly source: { readonly type: 'base64'; readonly media_type: string; readonly data: string }; readonly cache_control?: ClaudeCacheControl }
+  | { readonly type: 'tool_use'; readonly id: string; readonly name: string; readonly input: unknown; readonly cache_control?: ClaudeCacheControl }
+  | { readonly type: 'tool_result'; readonly tool_use_id: string; readonly content: string; readonly cache_control?: ClaudeCacheControl };
 
 export interface ClaudeTool {
   readonly name: string;
@@ -75,16 +75,20 @@ export function processClaudeData(
     });
   }
 
-  const fullContent = extractClaudeFullContent(json.content);
-  if (fullContent.text) {
-    handlers.onText(fullContent.text);
-    state.emitted = true;
+  // Non-stream / full message body — only present on the single object returned
+  // by stream=false responses. Stream events never carry a top-level `content` array.
+  if (Array.isArray(json.content)) {
+    const fullContent = extractClaudeFullContent(json.content);
+    if (fullContent.text) {
+      handlers.onText(fullContent.text);
+      state.emitted = true;
+    }
+    if (fullContent.thinking) {
+      handlers.onThinking(fullContent.thinking);
+      state.emitted = true;
+    }
+    appendClaudeFullToolUses(json.content, toolCalls, state);
   }
-  if (fullContent.thinking) {
-    handlers.onThinking(fullContent.thinking);
-    state.emitted = true;
-  }
-  appendClaudeFullToolUses(json.content, toolCalls, state);
 
   const delta = json.delta;
   const deltaUsage = delta?.usage;
@@ -183,7 +187,33 @@ export async function processClaudeFullResponse(
   const toolCalls = new Map<number, ToolCallAccumulator>();
   const state: StreamState = { emitted: false };
 
-  processClaudeData(body.trim(), toolCalls, handlers, state);
+  let json: any;
+  try {
+    json = JSON.parse(body.trim());
+  } catch {
+    throw emptyResponseError('Claude response', body);
+  }
+
+  if (json.usage) {
+    handlers.onUsage({
+      prompt_tokens: json.usage.input_tokens,
+      completion_tokens: json.usage.output_tokens,
+    });
+  }
+
+  if (Array.isArray(json.content)) {
+    const { text, thinking } = extractClaudeFullContent(json.content);
+    if (text) {
+      handlers.onText(text);
+      state.emitted = true;
+    }
+    if (thinking) {
+      handlers.onThinking(thinking);
+      state.emitted = true;
+    }
+    appendClaudeFullToolUses(json.content, toolCalls, state);
+  }
+
   flushToolCalls(toolCalls, handlers);
 
   if (!state.emitted) {
@@ -215,13 +245,44 @@ export function summarizeClaudeRequest(endpoint: string, request: ClaudeMessageR
     blockTypes,
     hasSystem: Boolean(request.system),
     tools: request.tools?.length ?? 0,
+    cacheBreakpoints: countCacheBreakpoints(request),
     maxTokens: request.max_tokens,
     hasTemperature: request.temperature !== undefined,
     thinkingBudget: request.thinking?.budget_tokens,
   });
 }
 
-export function toClaudeMessageRequest(request: ChatCompletionRequest, stream: boolean): ClaudeMessageRequest {
+function countCacheBreakpoints(request: ClaudeMessageRequest): number {
+  let count = 0;
+  if (Array.isArray(request.system)) {
+    for (const block of request.system) {
+      if (block.cache_control) {
+        count += 1;
+      }
+    }
+  }
+  if (request.tools) {
+    for (const tool of request.tools) {
+      if (tool.cache_control) {
+        count += 1;
+      }
+    }
+  }
+  for (const message of request.messages) {
+    for (const block of message.content) {
+      if ('cache_control' in block && block.cache_control) {
+        count += 1;
+      }
+    }
+  }
+  return count;
+}
+
+export function toClaudeMessageRequest(
+  request: ChatCompletionRequest,
+  stream: boolean,
+  debug?: (message: string) => void,
+): ClaudeMessageRequest {
   const messages: ClaudeMessage[] = [];
   const systemParts: string[] = [];
   const pendingToolUseIds = new Set<string>();
@@ -277,7 +338,7 @@ export function toClaudeMessageRequest(request: ChatCompletionRequest, stream: b
         type: 'tool_use',
         id: toolCall.id,
         name: toolCall.function.name,
-        input: parseToolArguments(toolCall.function.arguments),
+        input: parseToolArguments(toolCall.function.arguments, toolCall.function.name, debug),
       });
       pendingToolUseIds.add(toolCall.id);
     }
@@ -291,6 +352,7 @@ export function toClaudeMessageRequest(request: ChatCompletionRequest, stream: b
   }
 
   discardPendingToolUses();
+  applyLastUserCacheControl(messages);
 
   const maxTokens = request.max_tokens ?? 4096;
   const thinking = toClaudeThinking(request.reasoning_effort, maxTokens);
@@ -306,6 +368,22 @@ export function toClaudeMessageRequest(request: ChatCompletionRequest, stream: b
     temperature: thinking ? undefined : clampClaudeTemperature(request.temperature),
     thinking,
   };
+}
+
+function applyLastUserCacheControl(messages: ClaudeMessage[]): void {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i];
+    if (message.role !== 'user') {
+      continue;
+    }
+    const content = message.content as ClaudeContentBlock[];
+    if (content.length === 0) {
+      return;
+    }
+    const last = content[content.length - 1];
+    content[content.length - 1] = { ...last, cache_control: { type: 'ephemeral' } } as ClaudeContentBlock;
+    return;
+  }
 }
 
 export function clampClaudeTemperature(value: number | undefined): number | undefined {
@@ -408,10 +486,16 @@ export function toClaudeToolChoice(
   toolChoice: ChatCompletionRequest['tool_choice'],
   tools: ChatCompletionRequest['tools'],
 ): ClaudeToolChoice | undefined {
-  if (toolChoice !== 'auto' || !tools?.length) {
+  if (!tools?.length) {
     return undefined;
   }
-  return { type: 'auto' };
+  if (toolChoice === 'required') {
+    return { type: 'any' };
+  }
+  if (toolChoice === 'auto') {
+    return { type: 'auto' };
+  }
+  return undefined;
 }
 
 function textFromContent(content: ChatCompletionRequest['messages'][number]['content']): string {
@@ -424,10 +508,17 @@ function textFromContent(content: ChatCompletionRequest['messages'][number]['con
     .join('');
 }
 
-function parseToolArguments(value: string): unknown {
+function parseToolArguments(
+  value: string,
+  toolName?: string,
+  debug?: (message: string) => void,
+): unknown {
   try {
     return JSON.parse(value || '{}');
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const preview = (value ?? '').slice(0, 200);
+    debug?.(`Claude tool arguments JSON parse failed name=${toolName ?? '<unknown>'} error=${message} preview=${preview}`);
     return {};
   }
 }
